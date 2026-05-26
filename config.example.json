@@ -1,0 +1,13 @@
+{
+  "gemini_api_key": "",
+  "ollama_ssh": {
+    "host": "",
+    "port": 22,
+    "user": "",
+    "key_path": "",
+    "remote_ollama_host": "localhost",
+    "remote_ollama_port": 11434
+  },
+  "recent_gemini_models": [],
+  "recent_ollama_models": []
+}

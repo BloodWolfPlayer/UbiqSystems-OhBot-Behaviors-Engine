@@ -2,6 +2,18 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from typing import Protocol, runtime_checkable
+
+
+@runtime_checkable
+class LLMClient(Protocol):
+    """The contract every LLM source in this project implements."""
+
+    #* Anything that yields string chunks one at a time qualifies as an LLM client here.
+    #* The orchestrator never imports a concrete class, only this protocol, which lets
+    #* the scripted, Gemini and Ollama clients drop in interchangeably.
+    #? Needed?
+    def stream_response(self, prompt: str) -> AsyncIterator[str]: ...
 
 
 class ScriptedLLMClient:

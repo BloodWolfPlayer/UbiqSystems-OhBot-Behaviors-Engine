@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-EventKind = Literal["sentence", "action", "status"]
+EventKind = Literal["sentence", "action", "status", "emotion", "delay"]
 
 
 @dataclass(frozen=True)
