@@ -1,0 +1,18 @@
+# Windows development and testing — no Raspberry Pi hardware
+httpx>=0.27
+sshtunnel>=0.4
+paramiko>=3.4
+
+pyttsx3>=2.90
+gTTS>=2.5
+SpeechRecognition>=3.10
+PyAudio>=0.2.14
+vosk>=0.3.45
+
+ohbot>=2.1
+
+opencv-python>=4.9
+numpy>=1.26
+Pillow>=10.3
+
+python-dotenv>=1.0

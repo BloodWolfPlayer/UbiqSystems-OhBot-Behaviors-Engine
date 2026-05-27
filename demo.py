@@ -13,6 +13,7 @@ from llm_client import ScriptedLLMClient
 from orchestrator import RobotPipeline
 
 SYSTEM_PROMPT_FILE = Path(__file__).resolve().parent / "system_prompt.txt"
+EXAMPLE_SCRIPT_FILE = Path(__file__).resolve().parent / "example_script.txt"
 
 
 def _read_system_prompt() -> str:
@@ -43,16 +44,28 @@ async def _scripted_demo(text: str, chunk_size: int) -> None:
     await pipeline.run(prompt=text)
 
 
+def _load_example_script() -> str:
+    if not EXAMPLE_SCRIPT_FILE.exists():
+        raise FileNotFoundError(f"missing example script: {EXAMPLE_SCRIPT_FILE}")
+    lines = EXAMPLE_SCRIPT_FILE.read_text(encoding="utf-8").splitlines()
+    return " ".join(
+        line.strip()
+        for line in lines
+        if line.strip() and not line.strip().startswith("#")
+    )
+
+
 def _prompt_mode() -> str:
     print("Pick a backend:")
     print("  [1] Online (Gemini)")
     print("  [2] Remote Ollama (over SSH)")
     print("  [3] Scripted demo")
+    print("  [4] Example script (full capability demo)")
     while True:
         choice = input("> ").strip()
-        if choice in {"1", "2", "3"}:
+        if choice in {"1", "2", "3", "4"}:
             return choice
-        print("Enter 1, 2, or 3.")
+        print("Enter 1, 2, 3, or 4.")
 
 
 async def _chat_loop(pipeline: RobotPipeline) -> None:
@@ -134,10 +147,17 @@ async def main() -> None:
         await _run_gemini(cfg)
     elif choice == "2":
         await _run_ollama(cfg)
-    else:
+    elif choice == "3":
         text = input("Scripted text: ").strip()
         if text:
             await _scripted_demo(text, chunk_size=24)
+    else:
+        try:
+            script = _load_example_script()
+        except FileNotFoundError as exc:
+            print(f"error: {exc}")
+            return
+        await _scripted_demo(script, chunk_size=24)
 
 
 if __name__ == "__main__":

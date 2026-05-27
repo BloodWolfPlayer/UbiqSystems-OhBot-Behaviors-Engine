@@ -1,0 +1,4 @@
+# Linux development and testing — no Raspberry Pi hardware
+# Note: PyAudio requires portaudio19-dev: sudo apt install portaudio19-dev
+# Note: pyttsx3 requires espeak: sudo apt install espeak
+-r requirements-windows.txt

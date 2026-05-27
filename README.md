@@ -46,12 +46,21 @@ The pipeline can be driven by a real LLM instead of the scripted source. Two bac
 3. **Scripted demo**
    The original `--text "..."` flow is kept for development and regression checks. It needs no extra dependencies and no config. It is mainly there to sanity check if stuff broke.
 
-### First time setup (llm) 
+### First time setup (llm)
 
-1. Install the runtime dependencies if not done already.
-   ```bash
-   pip install -r requirements.txt
-   ```
+1. Install the runtime dependencies for your platform:
+
+   | Platform | Command |
+   |---|---|
+   | Windows (dev/testing) | `pip install -r requirements-windows.txt` |
+   | Linux (dev/testing) | `pip install -r requirements-linux.txt` |
+   | Raspberry Pi (deployment) | `pip install -r requirements-pi.txt` |
+
+   > **Linux note:** PyAudio and pyttsx3 need system packages first:
+   > ```bash
+   > sudo apt install portaudio19-dev espeak
+   > ```
+
 2. Copy the config template and fill it in.
    ```bash
    cp config.example.json config.json
