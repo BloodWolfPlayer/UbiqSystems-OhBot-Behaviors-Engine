@@ -46,8 +46,7 @@ class ObotController(ABC):
 
 class DemoObotController(ObotController):
     """Console-based controller for development and testing."""
-
-    #todo Replace these print statements with real OhBot SDK calls once the hardware is wired up over USB. Each method should drive the corresponding servo.
+    
     def __init__(self):
         super().__init__()
         self._neutral_positions: dict[int, float] = {
