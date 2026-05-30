@@ -5,8 +5,12 @@ paramiko>=3.4
 
 pyttsx3>=2.90
 gTTS>=2.5
+# Microphone input: sounddevice provides cross-platform mic capture (no compiler needed).
+# SpeechRecognition wraps Vosk (offline) and Google (online) speech-to-text engines.
+# The offline engine also needs a model downloaded once from
+# https://alphacephei.com/vosk/models (unzip it, set audio.vosk_model_path in config.json).
+sounddevice>=0.4.6
 SpeechRecognition>=3.10
-PyAudio>=0.2.14
 vosk>=0.3.45
 
 ohbot>=2.1

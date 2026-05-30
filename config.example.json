@@ -8,6 +8,11 @@
     "remote_ollama_host": "localhost",
     "remote_ollama_port": 11434
   },
+  "audio": {
+    "input_device_index": null,
+    "stt_engine": "",
+    "vosk_model_path": ""
+  },
   "recent_gemini_models": [],
   "recent_ollama_models": []
 }

@@ -7,6 +7,22 @@ EventKind = Literal["sentence", "action", "status", "emotion", "delay"]
 
 
 @dataclass(frozen=True)
+class InterruptionResult:
+    """Outcome of a single :meth:`RobotPipeline.run` turn.
+
+    ``spoken`` holds the sentences that were actually voiced (the sentence that was
+    in progress when the cut happened counts as spoken). ``unspoken`` holds every
+    sentence the LLM generated after that point — "the rest it would have said".
+    When ``interrupted`` is ``False`` the turn finished normally and ``unspoken`` is
+    empty.
+    """
+
+    interrupted: bool
+    spoken: list[str] = field(default_factory=list)
+    unspoken: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class StreamChunk:
     """A small piece of raw text streamed from the LLM."""
 

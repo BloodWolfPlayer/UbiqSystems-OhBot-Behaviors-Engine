@@ -5,6 +5,8 @@ from collections.abc import AsyncIterator
 
 import httpx
 
+from llm_client import format_interruption_note
+
 
 class OllamaAPIError(RuntimeError):
     pass
@@ -39,6 +41,8 @@ class OllamaLLMClient:
         #* Ollama wants the system prompt as the first entry in the messages list, in contrast
         #* to Gemini where the system instruction lives in a separate top level field.
         self._messages: list[dict] = [{"role": "system", "content": system_prompt}]
+        #* Folded into the next user turn after an interrupt (see GeminiLLMClient).
+        self._pending_note: str | None = None
 
     async def __aenter__(self) -> "OllamaLLMClient":
         return self
@@ -46,7 +50,13 @@ class OllamaLLMClient:
     async def __aexit__(self, exc_type, exc, tb) -> None:
         return None
 
+    def register_interruption(self, spoken: list[str], unspoken: list[str]) -> None:
+        self._pending_note = format_interruption_note(spoken, unspoken)
+
     async def stream_response(self, prompt: str) -> AsyncIterator[str]:
+        if self._pending_note:
+            prompt = f"{self._pending_note}\n\n{prompt}"
+            self._pending_note = None
         self._messages.append({"role": "user", "content": prompt})
 
         body = {
@@ -56,32 +66,35 @@ class OllamaLLMClient:
         }
 
         collected: list[str] = []
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=15.0)) as client:
-            try:
-                async with client.stream("POST", f"{self.base_url}/api/chat", json=body) as response:
-                    if response.status_code != 200:
-                        text = (await response.aread()).decode("utf-8", errors="replace")
-                        raise OllamaAPIError(
-                            f"Ollama /api/chat returned {response.status_code}: {text[:200]}"
-                        )
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=15.0)) as client:
+                try:
+                    async with client.stream("POST", f"{self.base_url}/api/chat", json=body) as response:
+                        if response.status_code != 200:
+                            text = (await response.aread()).decode("utf-8", errors="replace")
+                            raise OllamaAPIError(
+                                f"Ollama /api/chat returned {response.status_code}: {text[:200]}"
+                            )
 
-                    #* Ollama uses NDJSON: one JSON object per line. The last object has
-                    #* "done": true and may contain summary stats but no extra content.
-                    async for line in response.aiter_lines():
-                        if not line.strip():
-                            continue
-                        try:
-                            payload = json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
-                        content = payload.get("message", {}).get("content", "")
-                        if content:
-                            collected.append(content)
-                            yield content
-                        if payload.get("done"):
-                            break
-            except httpx.HTTPError as exc:
-                raise OllamaAPIError(f"network error while streaming: {exc}") from exc
-
-        if collected:
-            self._messages.append({"role": "assistant", "content": "".join(collected)})
+                        #* Ollama uses NDJSON: one JSON object per line. The last object has
+                        #* "done": true and may contain summary stats but no extra content.
+                        async for line in response.aiter_lines():
+                            if not line.strip():
+                                continue
+                            try:
+                                payload = json.loads(line)
+                            except json.JSONDecodeError:
+                                continue
+                            content = payload.get("message", {}).get("content", "")
+                            if content:
+                                collected.append(content)
+                                yield content
+                            if payload.get("done"):
+                                break
+                except httpx.HTTPError as exc:
+                    raise OllamaAPIError(f"network error while streaming: {exc}") from exc
+        finally:
+            #* Persist partial output too, so an interrupt mid-stream still leaves the
+            #* assistant turn in history (see GeminiLLMClient for the rationale).
+            if collected:
+                self._messages.append({"role": "assistant", "content": "".join(collected)})

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import sys
+import contextlib
 from pathlib import Path
 
 #* Only the lightweight imports live at the top level. The Gemini, Ollama and SSH modules
-#* are imported only inside the functions that need them, 
+#* are imported only inside the functions that need them,
 #* so the scripted demo runs even when httpx, sshtunnel and paramiko are not installed.
-from controller import DemoObotController
+from controller import ConsoleObotController, ObotController
 from llm_client import ScriptedLLMClient
 from orchestrator import RobotPipeline
 
@@ -20,6 +20,24 @@ def _read_system_prompt() -> str:
     if not SYSTEM_PROMPT_FILE.exists():
         raise FileNotFoundError(f"missing system prompt file: {SYSTEM_PROMPT_FILE}")
     return SYSTEM_PROMPT_FILE.read_text(encoding="utf-8")
+
+
+def make_controller(force_console: bool = False) -> ObotController:
+    """Pick a controller: real hardware when available, console otherwise.
+
+    Passing ``force_console`` (or running on a machine without the ohbot library) gives
+    the hardware-free controller so the whole pipeline — including LLM streaming and the
+    microphone path — can be tested without a robot.
+    """
+    if not force_console:
+        try:
+            from controller import HardwareObotController
+
+            return HardwareObotController()
+        except Exception as exc:
+            print(f"[controller] hardware unavailable ({exc});\n"
+                  f"[controller] falling back to the console controller.")
+    return ConsoleObotController()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,12 +52,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=24,
         help="Chunk size used by the scripted LLM source.",
     )
+    parser.add_argument(
+        "--console",
+        action="store_true",
+        help="Force the hardware-free console controller (no ohbot/servos needed).",
+    )
     return parser
 
 
-async def _scripted_demo(text: str, chunk_size: int) -> None:
+async def _scripted_demo(text: str, chunk_size: int, console: bool = False) -> None:
     llm_client = ScriptedLLMClient(text, chunk_size=chunk_size)
-    controller = DemoObotController()
+    controller = make_controller(force_console=console)
     pipeline = RobotPipeline(llm_client=llm_client, controller=controller)
     await pipeline.run(prompt=text)
 
@@ -68,27 +91,169 @@ def _prompt_mode() -> str:
         print("Enter 1, 2, 3, or 4.")
 
 
-async def _chat_loop(pipeline: RobotPipeline) -> None:
-    print("\nType a message (empty line or :quit to exit).")
+_CONTROLS_BANNER = (
+    "\nTalk to the bot. While it speaks, just start talking (or press SPACE) to cut it off.\n"
+    "Keys:  [SPACE] interrupt   [m] mute/unmute   [p] push-to-talk (press to capture)\n"
+    "       [o] open mic (auto)  [c] type instead (console)   [q]/[Esc] quit\n"
+)
+
+_CONSOLE_BANNER = (
+    "\n[console mode] Type a message and press Enter to send.\n"
+    "Empty line (or ':voice') returns to the microphone. ':quit' exits.\n"
+)
+
+
+async def _voice_session(cfg, pipeline: RobotPipeline) -> None:
+    """Wire the microphone, interrupt controller and keyboard controls to a pipeline."""
+    from audio_input import (
+        AudioInput,
+        AudioInputError,
+        pick_input_device,
+        pick_stt_engine,
+    )
+    from interrupt import InterruptController
+    from keyboard_interrupt import KeyListener
+
     loop = asyncio.get_running_loop()
-    while True:
-        try:
-            #* input() blocks the event loop. Running it in the default executor keeps
-            #* the rest of the async code (HTTP streams, SSH tunnel) responsive while
-            #* we wait on stdin.
-            line = await loop.run_in_executor(None, sys.stdin.readline)
-        except (EOFError, KeyboardInterrupt):
+
+    #* All the input()-based pickers must run BEFORE the raw-mode key listener starts,
+    #* otherwise the listener would swallow the keystrokes the pickers are waiting on.
+    try:
+        device_index = pick_input_device(cfg.audio.input_device_index)
+        backend = pick_stt_engine(cfg.audio.vosk_model_path, default=cfg.audio.stt_engine)
+    except AudioInputError as exc:
+        print(f"error: {exc}")
+        return
+    cfg.record_audio(input_device_index=device_index, stt_engine=backend.name)
+
+    try:
+        audio = AudioInput(device_index, backend, loop=loop)
+    except AudioInputError as exc:
+        print(f"error: {exc}")
+        return
+
+    interrupt = InterruptController(loop)
+    audio.on_barge_in = lambda: interrupt.trigger("voice")
+    quit_event = asyncio.Event()
+    #* Set by the 'c' key (from the listener thread) to flip into typed console mode.
+    console_event = asyncio.Event()
+
+    def on_key(ch: str) -> None:
+        if ch == " ":
+            #* Only meaningful while the bot is talking; ignore otherwise so we never
+            #* arm an interrupt for a turn that hasn't started.
+            if audio.is_speaking():
+                interrupt.trigger("keyboard")
+        elif ch in ("m", "M"):
+            audio.set_mode("vad" if audio.mode == "muted" else "muted")
+        elif ch in ("p", "P"):
+            if audio.mode != "ptt":
+                audio.set_mode("ptt")
+            audio.trigger_ptt()
+        elif ch in ("o", "O"):
+            audio.set_mode("vad")
+        elif ch in ("c", "C"):
+            loop.call_soon_threadsafe(console_event.set)
+        elif ch in ("q", "Q", "\x1b"):
+            loop.call_soon_threadsafe(quit_event.set)
+
+    keys = KeyListener(on_key)
+    audio.start()
+    keys.start()
+    if not keys.available:
+        print("[keys] no interactive terminal detected — keyboard controls disabled "
+              "(voice barge-in still works).")
+
+    print(_CONTROLS_BANNER)
+    try:
+        await _voice_chat_loop(pipeline, audio, interrupt, quit_event, console_event, keys)
+    finally:
+        keys.stop()
+        audio.stop()
+
+
+async def _run_turn(pipeline: RobotPipeline, audio, interrupt, user_text: str) -> None:
+    """Speak one response, allowing barge-in/keyboard interruption."""
+    print(f"[you] {user_text}")
+    interrupt.clear()
+    audio.set_speaking(True)
+    try:
+        result = await pipeline.run(user_text, interrupt)
+    finally:
+        audio.set_speaking(False)
+    if result.interrupted:
+        reason = interrupt.signal.reason if interrupt.signal else "?"
+        print(f"[interrupted via {reason}] the bot knows it was cut off and what it "
+              f"hadn't said yet.")
+
+
+async def _voice_chat_loop(
+    pipeline: RobotPipeline,
+    audio,
+    interrupt,
+    quit_event: asyncio.Event,
+    console_event: asyncio.Event,
+    keys,
+) -> None:
+    loop = asyncio.get_running_loop()
+    console_mode = False
+
+    while not quit_event.is_set():
+        if console_mode:
+            #* Typed input. The raw key listener is stopped while we own stdin, so the
+            #* way back to voice is an empty line or ':voice' (the 'c' key can't be read
+            #* here). 'audio' is muted so the mic doesn't fire in the background.
+            line = await loop.run_in_executor(None, _read_console_line)
+            if line is None or line == "" or line.lower() == ":voice":
+                console_mode = False
+                audio.drain_queue()
+                audio.set_mode("vad")
+                keys.start()
+                print(_CONTROLS_BANNER)
+                continue
+            if line.lower() == ":quit":
+                return
+            await _run_turn(pipeline, audio, interrupt, line)
+            continue
+
+        #* Voice mode: wait for the next utterance, a quit, or a console-toggle.
+        utterance_task = asyncio.create_task(audio.next_utterance())
+        quit_task = asyncio.create_task(quit_event.wait())
+        console_task = asyncio.create_task(console_event.wait())
+        done, pending = await asyncio.wait(
+            {utterance_task, quit_task, console_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in pending:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+        if quit_task in done:
             print()
             return
-        if not line:
-            return
-        line = line.strip()
-        if not line or line == ":quit":
-            return
-        await pipeline.run(prompt=line)
+        if console_task in done:
+            console_event.clear()
+            console_mode = True
+            keys.stop()           # release stdin so input() works
+            audio.set_mode("muted")  # don't capture while typing
+            print(_CONSOLE_BANNER)
+            continue
+
+        user_text = utterance_task.result().strip()
+        if user_text:
+            await _run_turn(pipeline, audio, interrupt, user_text)
 
 
-async def _run_gemini(cfg) -> None:
+def _read_console_line() -> str | None:
+    """Blocking stdin read used inside the console-mode executor."""
+    try:
+        return input("[console] > ")
+    except (EOFError, KeyboardInterrupt):
+        return None
+
+
+async def _run_gemini(cfg, console: bool = False) -> None:
     from gemini_client import GeminiAPIError, GeminiLLMClient
     from model_picker import pick_gemini_model
 
@@ -98,13 +263,13 @@ async def _run_gemini(cfg) -> None:
         print(f"error: {exc}")
         return
     cfg.record_gemini_model(model)
-    controller = DemoObotController()
+    controller = make_controller(force_console=console)
     async with GeminiLLMClient(cfg.gemini_api_key, model, _read_system_prompt()) as client:
         pipeline = RobotPipeline(llm_client=client, controller=controller)
-        await _chat_loop(pipeline)
+        await _voice_session(cfg, pipeline)
 
 
-async def _run_ollama(cfg) -> None:
+async def _run_ollama(cfg, console: bool = False) -> None:
     from model_picker import pick_ollama_model
     from ollama_client import OllamaAPIError, OllamaLLMClient
     from ssh_tunnel import SSHTunnelError, open_ollama_tunnel
@@ -119,10 +284,10 @@ async def _run_ollama(cfg) -> None:
                 print(f"error: {exc}")
                 return
             cfg.record_ollama_model(model)
-            controller = DemoObotController()
+            controller = make_controller(force_console=console)
             async with OllamaLLMClient(base_url, model, _read_system_prompt()) as client:
                 pipeline = RobotPipeline(llm_client=client, controller=controller)
-                await _chat_loop(pipeline)
+                await _voice_session(cfg, pipeline)
     except SSHTunnelError as exc:
         print(f"error: {exc}")
 
@@ -131,7 +296,7 @@ async def main() -> None:
     args = build_parser().parse_args()
 
     if args.text is not None:
-        await _scripted_demo(args.text, args.chunk_size)
+        await _scripted_demo(args.text, args.chunk_size, console=args.console)
         return
 
     from config import load_config
@@ -144,20 +309,20 @@ async def main() -> None:
 
     choice = _prompt_mode()
     if choice == "1":
-        await _run_gemini(cfg)
+        await _run_gemini(cfg, console=args.console)
     elif choice == "2":
-        await _run_ollama(cfg)
+        await _run_ollama(cfg, console=args.console)
     elif choice == "3":
         text = input("Scripted text: ").strip()
         if text:
-            await _scripted_demo(text, chunk_size=24)
+            await _scripted_demo(text, chunk_size=24, console=args.console)
     else:
         try:
             script = _load_example_script()
         except FileNotFoundError as exc:
             print(f"error: {exc}")
             return
-        await _scripted_demo(script, chunk_size=24)
+        await _scripted_demo(script, chunk_size=24, console=args.console)
 
 
 if __name__ == "__main__":

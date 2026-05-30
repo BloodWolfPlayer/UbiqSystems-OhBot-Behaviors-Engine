@@ -15,6 +15,36 @@ class LLMClient(Protocol):
     #? Needed?
     def stream_response(self, prompt: str) -> AsyncIterator[str]: ...
 
+    def register_interruption(self, spoken: list[str], unspoken: list[str]) -> None:
+        """Tell the source it was interrupted mid-reply.
+
+        Optional: history-keeping clients (Gemini, Ollama) record a note so the next
+        turn is interruption-aware. Stateless sources may no-op.
+        """
+
+
+def format_interruption_note(spoken: list[str], unspoken: list[str]) -> str:
+    """Build the note injected into LLM history after a barge-in / keyboard interrupt.
+
+    ``spoken`` is what actually came out of the speaker; ``unspoken`` is the rest the
+    model had generated but never voiced. Either may be empty.
+    """
+    spoken_text = " ".join(s.strip() for s in spoken if s.strip()).strip()
+    unspoken_text = " ".join(s.strip() for s in unspoken if s.strip()).strip()
+
+    parts = ["[SYSTEM NOTE: The user interrupted you while you were still speaking."]
+    if spoken_text:
+        parts.append(f' You had already said aloud: "{spoken_text}".')
+    if unspoken_text:
+        parts.append(f' You were cut off before you could say: "{unspoken_text}".')
+    else:
+        parts.append(" You were cut off near the very end of your reply.")
+    parts.append(
+        " Acknowledge that you were interrupted and respond to what the user says next."
+        " Do not simply repeat what you were going to say.]"
+    )
+    return "".join(parts)
+
 
 class ScriptedLLMClient:
     """Development-only source that replays a finished string as streamed output."""
@@ -29,3 +59,7 @@ class ScriptedLLMClient:
         for index in range(0, len(self.response_text), self.chunk_size):
             await asyncio.sleep(0.1)
             yield self.response_text[index : index + self.chunk_size]
+
+    def register_interruption(self, spoken: list[str], unspoken: list[str]) -> None:
+        #* Stateless replay source — nothing to remember between turns.
+        del spoken, unspoken

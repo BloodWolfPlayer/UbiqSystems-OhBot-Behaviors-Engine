@@ -22,9 +22,18 @@ class OllamaSSHConfig:
 
 
 @dataclass
+class AudioConfig:
+    #* Persisted so the mic/STT pickers can offer the last choice as the default.
+    input_device_index: int | None = None
+    stt_engine: str = ""  # "vosk" | "google"
+    vosk_model_path: str = ""
+
+
+@dataclass
 class Config:
     gemini_api_key: str = ""
     ollama_ssh: OllamaSSHConfig = field(default_factory=OllamaSSHConfig)
+    audio: AudioConfig = field(default_factory=AudioConfig)
     recent_gemini_models: list[str] = field(default_factory=list)
     recent_ollama_models: list[str] = field(default_factory=list)
 
@@ -38,12 +47,25 @@ class Config:
         self.recent_ollama_models = _bump(self.recent_ollama_models, model)
         self.save()
 
+    def record_audio(
+        self,
+        *,
+        input_device_index: int | None = None,
+        stt_engine: str | None = None,
+    ) -> None:
+        if input_device_index is not None:
+            self.audio.input_device_index = input_device_index
+        if stt_engine is not None:
+            self.audio.stt_engine = stt_engine
+        self.save()
+
     def save(self) -> None:
         if self._path is None:
             return
         payload = {
             "gemini_api_key": self.gemini_api_key,
             "ollama_ssh": asdict(self.ollama_ssh),
+            "audio": asdict(self.audio),
             "recent_gemini_models": self.recent_gemini_models,
             "recent_ollama_models": self.recent_ollama_models,
         }
@@ -76,6 +98,8 @@ def load_config() -> Config:
 
     data = json.loads(path.read_text(encoding="utf-8"))
     ssh_data = data.get("ollama_ssh") or {}
+    audio_data = data.get("audio") or {}
+    device_index = audio_data.get("input_device_index")
     cfg = Config(
         gemini_api_key=data.get("gemini_api_key", ""),
         ollama_ssh=OllamaSSHConfig(
@@ -85,6 +109,11 @@ def load_config() -> Config:
             key_path=ssh_data.get("key_path", ""),
             remote_ollama_host=ssh_data.get("remote_ollama_host", "localhost"),
             remote_ollama_port=int(ssh_data.get("remote_ollama_port", 11434)),
+        ),
+        audio=AudioConfig(
+            input_device_index=int(device_index) if device_index is not None else None,
+            stt_engine=audio_data.get("stt_engine", ""),
+            vosk_model_path=audio_data.get("vosk_model_path", ""),
         ),
         recent_gemini_models=list(data.get("recent_gemini_models", [])),
         recent_ollama_models=list(data.get("recent_ollama_models", [])),

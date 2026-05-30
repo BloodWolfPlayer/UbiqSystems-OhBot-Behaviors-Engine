@@ -42,9 +42,9 @@ def default_action_registry() -> ActionRegistry:
     async def _nod(controller: ObotController) -> None:
         await controller.nod()
 
-    @registry.register("wave")
-    async def _wave(controller: ObotController) -> None:
-        await controller.wave()
+   # @registry.register("wave")
+   # async def _wave(controller: ObotController) -> None:
+   #     await controller.wave()
 
     @registry.register("lookleft")
     async def _look_left(controller: ObotController) -> None:
