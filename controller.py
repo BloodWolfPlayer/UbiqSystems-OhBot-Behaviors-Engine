@@ -6,6 +6,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Final
+from unittest import case
 
 #* ohbot drives real servos and is only present on the robot (and the Pi deploy image).
 #* Import it lazily/guarded so the rest of the program  pipeline, LLM clients,
@@ -23,6 +24,14 @@ class MotionOffset:
     joint_id: int
     delta: float
     duration_s: float
+
+@dataclass(slots=True)
+class ActiveOffset:
+    joint_id: int
+    delta: float
+    remaining_s: float
+    applied: float
+
 
 class ObotController(ABC):
     """Robot-facing commands live here."""
@@ -78,7 +87,7 @@ class HardwareObotController(ObotController):
             ohbot.LIDBLINK: 5.0,
         }
         self._offset_requests: list[MotionOffset] = []
-        self._active_offsets: list[tuple[int, float, float]] = []
+        self._active_offsets: list[ActiveOffset] = []
         self._offset_lock = threading.Lock()
         self._stop_event = threading.Event()
         #* Tripped by stop_speaking() so a sentence still queued for the TTS thread is
@@ -110,12 +119,46 @@ class HardwareObotController(ObotController):
         with self._offset_lock:
             self._offset_requests.append(MotionOffset(joint_id=joint_id, delta=delta, duration_s=duration_s))
 
-    def _blend_offsets_loop(self) -> None:
+    async def _blend_offsets_loop(self) -> None:
         #TODO implement offset averaging so multiple overlapping requests blend together instead of fighting (e.g. nod + shake_head).
         #Run this at a specified frequency and each loop reduce the time for each active
         #offset until it is at 0, where it can then be removed.
-        while not self._stop_event.wait(0.05):
-            pass
+        # Need to Take OffsetRequests and average them
+        while not self._stop_event.is_set():
+            with self._offset_lock:
+                # From RequestOffset to ActiveOffset
+                for req in self._offset_requests: 
+                    self._active_offsets.append(ActiveOffset(
+                        joint_id=req.joint_id, 
+                        delta=req.delta, 
+                        remaining_s=req.duration_s,
+                        applied=0.0
+                    ))
+                self._offset_requests.clear()
+
+                # Calculate how much movement is applied this frame
+                frame_deltas = {}
+                for active in self._active_offsets:
+                    this_frame = (active.delta - active.applied) / active.remaining_s * 0.05
+                    frame_deltas.setdefault(active.joint_id, []).append(this_frame)
+
+                # Averaging and applying movement
+                for joint_id, deltas in frame_deltas.items():
+                    avg_delta = sum(deltas) / len(deltas)
+                    ohbot.move(joint_id, self._neutral_positions[joint_id] + avg_delta)
+
+                # Subtract used Time and applied Movement
+                for active in self._active_offsets:
+                    active.applied += (active.delta - active.applied) / active.remaining_s * 0.05
+                    active.remaining_s -= 0.05
+
+                ## Remove at 0
+                self._active_offsets = [active for active in self._active_offsets if active.remaining_s > 0]
+
+                await asyncio.sleep(0.05)
+
+            #! Needs @Sir-Kuhnhero to look over
+
 
     async def speak_sentence(self, sentence: str) -> None:
         print(f"[speech] {sentence}")
@@ -211,6 +254,16 @@ class HardwareObotController(ObotController):
     async def set_emotion(self, emotion: str) -> None:
         print(f"[emotion] {emotion}")
         #TODO use new offset system
+        ### Emotions basics: Happy, Sad
+        ### Need Testing
+        if emotion == "Happy":
+            self._enqueue_offset(ohbot.TOPLIP, +3.0, 1.0)
+            self._enqueue_offset(ohbot.BOTTOMLIP, +3.0, 1.0)
+            self._enqueue_offset(ohbot.EYETURN, +2.0, 1.0)
+        elif emotion == "Sad":
+            self._enqueue_offset(ohbot.TOPLIP, -3.0, 1.0)
+            self._enqueue_offset(ohbot.BOTTOMLIP, -3.0, 1.0)
+            self._enqueue_offset(ohbot.EYETURN, -2.0, 1.0)
         # Advanced, need to change the voice synthesizer
         #if emotion == "Happy":
         #    ohbot.move(ohbot.TOPLIP, 8)
