@@ -36,6 +36,7 @@ class Config:
     audio: AudioConfig = field(default_factory=AudioConfig)
     recent_gemini_models: list[str] = field(default_factory=list)
     recent_ollama_models: list[str] = field(default_factory=list)
+    ohbot_port: str = "COM7"
 
     _path: Path | None = field(default=None, repr=False, compare=False)
 
@@ -68,6 +69,7 @@ class Config:
             "audio": asdict(self.audio),
             "recent_gemini_models": self.recent_gemini_models,
             "recent_ollama_models": self.recent_ollama_models,
+            "ohbot_port": self.ohbot_port,
         }
         #! Atomic write: write to a temp file in the same directory then rename.
         #! Protects the config from being half written if the process is killed mid save.
@@ -117,6 +119,7 @@ def load_config() -> Config:
         ),
         recent_gemini_models=list(data.get("recent_gemini_models", [])),
         recent_ollama_models=list(data.get("recent_ollama_models", [])),
+        ohbot_port=data.get("ohbot_port", "COM7"),
     )
     cfg._path = path
     return cfg

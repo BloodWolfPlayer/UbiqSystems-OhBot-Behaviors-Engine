@@ -14,5 +14,6 @@
     "vosk_model_path": ""
   },
   "recent_gemini_models": [],
-  "recent_ollama_models": []
+  "recent_ollama_models": [],
+  "ohbot_port": "COM7"
 }

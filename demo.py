@@ -22,7 +22,7 @@ def _read_system_prompt() -> str:
     return SYSTEM_PROMPT_FILE.read_text(encoding="utf-8")
 
 
-def make_controller(force_console: bool = False) -> ObotController:
+def make_controller(force_console: bool = False, ohbot_port: str = "COM7") -> ObotController:
     """Pick a controller: real hardware when available, console otherwise.
 
     Passing ``force_console`` (or running on a machine without the ohbot library) gives
@@ -33,10 +33,12 @@ def make_controller(force_console: bool = False) -> ObotController:
         try:
             from controller import HardwareObotController
 
-            return HardwareObotController()
+            return HardwareObotController(port=ohbot_port)
         except Exception as exc:
             print(f"[controller] hardware unavailable ({exc});\n"
                   f"[controller] falling back to the console controller.")
+
+    print("using console controller")
     return ConsoleObotController()
 
 
@@ -61,10 +63,44 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 async def _scripted_demo(text: str, chunk_size: int, console: bool = False) -> None:
+    from keyboard_interrupt import KeyListener
+
     llm_client = ScriptedLLMClient(text, chunk_size=chunk_size)
     controller = make_controller(force_console=console)
     pipeline = RobotPipeline(llm_client=llm_client, controller=controller)
-    await pipeline.run(prompt=text)
+
+    loop = asyncio.get_running_loop()
+    quit_event = asyncio.Event()
+
+    def on_key(ch: str) -> None:
+        if ch in ("q", "Q", "\x1b"):
+            loop.call_soon_threadsafe(quit_event.set)
+
+    keys = KeyListener(on_key)
+    keys.start()
+    if keys.available:
+        print("Press [q] or [Esc] to stop the demo early.\n")
+
+    pipeline_task = asyncio.create_task(pipeline.run(prompt=text))
+    quit_task = asyncio.create_task(quit_event.wait())
+
+    done, pending = await asyncio.wait(
+        {pipeline_task, quit_task},
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    keys.stop()
+
+    for task in pending:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    if quit_task in done:
+        await controller.stop_speaking()
+        print("\n[killswitch] Scripted demo stopped.")
+
+    controller.close()
 
 
 def _load_example_script() -> str:
@@ -95,11 +131,13 @@ _CONTROLS_BANNER = (
     "\nTalk to the bot. While it speaks, just start talking (or press SPACE) to cut it off.\n"
     "Keys:  [SPACE] interrupt   [m] mute/unmute   [p] push-to-talk (press to capture)\n"
     "       [o] open mic (auto)  [c] type instead (console)   [q]/[Esc] quit\n"
+    "Stuck? Press [c] to enter console mode, then type 'exit' to force-quit the process.\n"
 )
 
 _CONSOLE_BANNER = (
     "\n[console mode] Type a message and press Enter to send.\n"
-    "Empty line (or ':voice') returns to the microphone. ':quit' exits.\n"
+    "Empty line (or ':voice') returns to the microphone.\n"
+    "Type 'exit' or ':quit' to force-quit the program.\n"
 )
 
 
@@ -211,7 +249,8 @@ async def _voice_chat_loop(
                 keys.start()
                 print(_CONTROLS_BANNER)
                 continue
-            if line.lower() == ":quit":
+            if line.lower() in ("exit", "quit", ":quit"):
+                print("[killswitch] Exiting.")
                 return
             await _run_turn(pipeline, audio, interrupt, line)
             continue
@@ -241,6 +280,9 @@ async def _voice_chat_loop(
             continue
 
         user_text = utterance_task.result().strip()
+        if user_text.upper() in ("EXIT", "QUIT"):
+            print("[killswitch] Exiting.")
+            return
         if user_text:
             await _run_turn(pipeline, audio, interrupt, user_text)
 
@@ -263,10 +305,13 @@ async def _run_gemini(cfg, console: bool = False) -> None:
         print(f"error: {exc}")
         return
     cfg.record_gemini_model(model)
-    controller = make_controller(force_console=console)
-    async with GeminiLLMClient(cfg.gemini_api_key, model, _read_system_prompt()) as client:
-        pipeline = RobotPipeline(llm_client=client, controller=controller)
-        await _voice_session(cfg, pipeline)
+    controller = make_controller(force_console=console, ohbot_port=cfg.ohbot_port)
+    try:
+        async with GeminiLLMClient(cfg.gemini_api_key, model, _read_system_prompt()) as client:
+            pipeline = RobotPipeline(llm_client=client, controller=controller)
+            await _voice_session(cfg, pipeline)
+    finally:
+        controller.close()
 
 
 async def _run_ollama(cfg, console: bool = False) -> None:
@@ -284,10 +329,13 @@ async def _run_ollama(cfg, console: bool = False) -> None:
                 print(f"error: {exc}")
                 return
             cfg.record_ollama_model(model)
-            controller = make_controller(force_console=console)
-            async with OllamaLLMClient(base_url, model, _read_system_prompt()) as client:
-                pipeline = RobotPipeline(llm_client=client, controller=controller)
-                await _voice_session(cfg, pipeline)
+            controller = make_controller(force_console=console, ohbot_port=cfg.ohbot_port)
+            try:
+                async with OllamaLLMClient(base_url, model, _read_system_prompt()) as client:
+                    pipeline = RobotPipeline(llm_client=client, controller=controller)
+                    await _voice_session(cfg, pipeline)
+            finally:
+                controller.close()
     except SSHTunnelError as exc:
         print(f"error: {exc}")
 
