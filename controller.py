@@ -85,6 +85,7 @@ class HardwareObotController(ObotController):
         
         self._offset_requests: list[MotionOffset] = []
         self._current_state = OhbotState()
+        self._ohbot_lock = threading.Lock()  #* Serialise access to the ohbot library, which is not thread-safe.
         self._offset_lock = threading.Lock()
         self._stop_event = threading.Event()
         #* Tripped by stop_speaking() so a sentence still queued for the TTS thread is
@@ -113,9 +114,9 @@ class HardwareObotController(ObotController):
         """Run a no-op on the main thread to ensure the COM objects for speech are created there."""
 
         # apply the average state to the Ohbot hardware.
-        for joint in self._current_state.MotionState:
-            ohbot.move(joint.joint_id, joint.position)
-        pass
+        with self._ohbot_lock:
+            for joint in self._current_state.MotionState:
+                ohbot.move(joint.joint_id, joint.position)
 
     def _enqueue_offset(self, joint_id: int, delta: float, duration_s: float) -> None:
         duration_s = max(0.0, duration_s)
@@ -137,8 +138,8 @@ class HardwareObotController(ObotController):
                     else:
                         #* Apply the offset relative to the current position, not the hardware's absolute position, so multiple overlapping offsets blend together instead of fighting.
 
-                        self._current_state[self._offset_requests[i].joint_id].position += self._offset_requests[i].delta
-                        self._current_state[self._offset_requests[i].joint_id].count += 1
+                        self._current_state.MotionState[self._offset_requests[i].joint_id].position += self._offset_requests[i].delta
+                        self._current_state.MotionState[self._offset_requests[i].joint_id].count += 1
 
                         self._offset_requests[i].duration_s -= duration
 
@@ -164,11 +165,12 @@ class HardwareObotController(ObotController):
         #! is fine because interruption takes effect at sentence boundaries anyway (ohbot
         #! cannot stop an utterance mid-flight).
         #todo check out this in detail. This was a quick Claude Fix.
-        ohbot.setVoice("-vzira")
-        try:
-            ohbot.say(sentence)
-        except Exception as exc:
-            print(f"[speech] ohbot.say failed: {exc}")
+        with self._ohbot_lock:
+            ohbot.setVoice("-vzira")
+            try:
+                ohbot.say(sentence)
+            except Exception as exc:
+                print(f"[speech] ohbot.say failed: {exc}")
 
     async def stop_speaking(self) -> None:
         self._speech_stopped.set()
@@ -187,43 +189,52 @@ class HardwareObotController(ObotController):
 
     async def nod(self) -> None:
         print("[action] nod")
-        self._enqueue_offset(ohbot.HEADNOD, +3.0, 0.5)
+        with self._ohbot_lock:
+            self._enqueue_offset(ohbot.HEADNOD, +3.0, 0.5)
         await asyncio.sleep(0.5)
-        self._enqueue_offset(ohbot.HEADNOD, -3.0, 0.75)
+        with self._ohbot_lock:
+            self._enqueue_offset(ohbot.HEADNOD, -3.0, 0.75)
         await asyncio.sleep(0.75)
 
     async def look_left(self) -> None:
         print("[action] look_left")
-        self._enqueue_offset(ohbot.EYETURN, +5.0, 1.5)
+        with self._ohbot_lock:
+            self._enqueue_offset(ohbot.EYETURN, +5.0, 1.5)
         await asyncio.sleep(1.5)
 
     async def look_right(self) -> None:
         print("[action] look_right")
-        self._enqueue_offset(ohbot.EYETURN, -5.0, 1.5)
+        with self._ohbot_lock:
+            self._enqueue_offset(ohbot.EYETURN, -5.0, 1.5)
         await asyncio.sleep(1.5)
 
     async def blink(self) -> None:
         print("[action] blink")
-        self._enqueue_offset(ohbot.LIDBLINK, -5.0, 0.5)
+        with self._ohbot_lock:
+            self._enqueue_offset(ohbot.LIDBLINK, -5.0, 0.5)
         await asyncio.sleep(0.5)
 
     async def wink(self) -> None:
         #* Obot has a single shared lid servo, so a wink is rendered as a quick, snappier blink the closest the hardware can manage.
         #todo @Aquiler please check if done right
         print("[action] wink")
-        self._enqueue_offset(ohbot.LIDBLINK, -5.0, 0.2)
+        with self._ohbot_lock:
+            self._enqueue_offset(ohbot.LIDBLINK, -5.0, 0.2)
         await asyncio.sleep(0.3)
 
     async def shake_head(self) -> None:
         print("[action] shake_head")
-        self._enqueue_offset(ohbot.HEADTURN, -2.0, 0.5)
-        self._enqueue_offset(ohbot.EYETURN, +2.0, 0.5)
+        with self._ohbot_lock:
+            self._enqueue_offset(ohbot.HEADTURN, -2.0, 0.5)
+            self._enqueue_offset(ohbot.EYETURN, +2.0, 0.5)
         await asyncio.sleep(0.5)
-        self._enqueue_offset(ohbot.HEADTURN, +2.0, 1.0)
-        self._enqueue_offset(ohbot.EYETURN, -2.0, 1.0)
+        with self._ohbot_lock:
+            self._enqueue_offset(ohbot.HEADTURN, +2.0, 1.0)
+            self._enqueue_offset(ohbot.EYETURN, -2.0, 1.0)
         await asyncio.sleep(1)
-        self._enqueue_offset(ohbot.HEADTURN, -2.0, 0.5)
-        self._enqueue_offset(ohbot.EYETURN, +2.0, 0.5)
+        with self._ohbot_lock:
+            self._enqueue_offset(ohbot.HEADTURN, -2.0, 0.5)
+            self._enqueue_offset(ohbot.EYETURN, +2.0, 0.5)
         await asyncio.sleep(0.5)
 
     async def set_emotion(self, emotion: str) -> None:
@@ -232,13 +243,15 @@ class HardwareObotController(ObotController):
         ### Emotions basics: Happy, Sad
         ### Need Testing
         if emotion == "Happy":
-            self._enqueue_offset(ohbot.TOPLIP, +3.0, 1.0)
-            self._enqueue_offset(ohbot.BOTTOMLIP, +3.0, 1.0)
-            self._enqueue_offset(ohbot.EYETURN, +2.0, 1.0)
+            with self._ohbot_lock:
+                self._enqueue_offset(ohbot.TOPLIP, +3.0, 1.0)
+                self._enqueue_offset(ohbot.BOTTOMLIP, +3.0, 1.0)
+                self._enqueue_offset(ohbot.EYETURN, +2.0, 1.0)
         elif emotion == "Sad":
-            self._enqueue_offset(ohbot.TOPLIP, -3.0, 1.0)
-            self._enqueue_offset(ohbot.BOTTOMLIP, -3.0, 1.0)
-            self._enqueue_offset(ohbot.EYETURN, -2.0, 1.0)
+            with self._ohbot_lock:
+                self._enqueue_offset(ohbot.TOPLIP, -3.0, 1.0)
+                self._enqueue_offset(ohbot.BOTTOMLIP, -3.0, 1.0)
+                self._enqueue_offset(ohbot.EYETURN, -2.0, 1.0)
 
 
 class ConsoleObotController(ObotController):
