@@ -112,38 +112,38 @@ class HardwareObotController(ObotController):
 
     def mainThread(self) -> None:
         """Run a no-op on the main thread to ensure the COM objects for speech are created there."""
+        duration = 0.1
+
+        with self._offset_lock:
+            motionStates = list[MotionState] = [MotionState(joint_id=i, position=0.0, count=1) for i in range(6)]
+
+            for i in range(len(self._offset_requests)):
+                if self._offset_requests[i].duration_s <= 0:
+                    self._offset_requests.pop(i)
+                else:
+                    #* Apply the offset relative to the current position, not the hardware's absolute position, so multiple overlapping offsets blend together instead of fighting.
+
+                    motionStates[self._offset_requests[i].joint_id].position += self._offset_requests[i].delta
+                    motionStates[self._offset_requests[i].joint_id].count += 1
+
+                    self._offset_requests[i].duration_s -= duration
+
+            for i in range(len(motionStates))
+                averagedPosition = motionStates.position / motionStates.count
+                motionStates[i] = averagedPosition
+
 
         # apply the average state to the Ohbot hardware.
         with self._ohbot_lock:
-            for joint in self._current_state.MotionState:
+            for joint in motionStates:
                 ohbot.move(joint.joint_id, joint.position)
+        
+        time.sleep(duration)
 
     def _enqueue_offset(self, joint_id: int, delta: float, duration_s: float) -> None:
         duration_s = max(0.0, duration_s)
         with self._offset_lock:
             self._offset_requests.append(MotionOffset(joint_id=joint_id, delta=delta, duration_s=duration_s))
-
-    async def _blend_offsets_loop(self) -> None:
-        #TODO implement offset averaging so multiple overlapping requests blend together instead of fighting (e.g. nod + shake_head).
-        #Run this at a specified frequency and each loop reduce the time for each active
-        #offset until it is at 0, where it can then be removed.
-        # Need to Take OffsetRequests and average them
-        duration = 0.1
-
-        while not self._stop_event.is_set():
-            with self._offset_lock:
-                for i in range(len(self._offset_requests)):
-                    if self._offset_requests[i].duration_s <= 0:
-                        self._offset_requests.pop(i)
-                    else:
-                        #* Apply the offset relative to the current position, not the hardware's absolute position, so multiple overlapping offsets blend together instead of fighting.
-
-                        self._current_state.MotionState[self._offset_requests[i].joint_id].position += self._offset_requests[i].delta
-                        self._current_state.MotionState[self._offset_requests[i].joint_id].count += 1
-
-                        self._offset_requests[i].duration_s -= duration
-
-            time.sleep(duration)
 
 
     async def speak_sentence(self, sentence: str) -> None:
