@@ -26,11 +26,16 @@ class MotionOffset:
     duration_s: float
 
 @dataclass(slots=True)
-class ActiveOffset:
+class MotionState:
+    """Current position of each servo, tracked internally to calculate blended offsets."""
     joint_id: int
-    delta: float
-    remaining_s: float
-    applied: float
+    position: float
+    count: int
+
+@dataclass(slots=True)
+class OhbotState:
+    """Current position of each servo, tracked internally to calculate blended offsets."""
+    MotionState: list[MotionState] = [MotionState(joint_id=i, position=0.0, count=1) for i in range(6)]
 
 
 class ObotController(ABC):
@@ -59,9 +64,6 @@ class ObotController(ABC):
     @abstractmethod
     async def wink(self) -> None: ...
 
-   # @abstractmethod
-   # async def wave(self) -> None: ...
-
     @abstractmethod
     async def shake_head(self) -> None: ...
 
@@ -80,14 +82,9 @@ class HardwareObotController(ObotController):
                 "cannot start. Install it on the robot/Pi, or use ConsoleObotController "
                 "(the demo falls back to it automatically)."
             )
-        self._neutral_positions: dict[int, float] = {
-            ohbot.HEADNOD: 5.0,
-            ohbot.HEADTURN: 5.0,
-            ohbot.EYETURN: 5.0,
-            ohbot.LIDBLINK: 5.0,
-        }
+        
         self._offset_requests: list[MotionOffset] = []
-        self._active_offsets: list[ActiveOffset] = []
+        self._current_state = OhbotState()
         self._offset_lock = threading.Lock()
         self._stop_event = threading.Event()
         #* Tripped by stop_speaking() so a sentence still queued for the TTS thread is
@@ -95,8 +92,6 @@ class HardwareObotController(ObotController):
         self._speech_stopped = threading.Event()
 
         ohbot.reset()
-        for joint_id, neutral in self._neutral_positions.items():
-            ohbot.move(joint_id, neutral)
 
         self._blend_thread = threading.Thread(target=self._blend_offsets_loop, daemon=True)
         self._blend_thread.start()
@@ -114,6 +109,14 @@ class HardwareObotController(ObotController):
     def __del__(self) -> None:
         self.close()
 
+    def mainThread(self) -> None:
+        """Run a no-op on the main thread to ensure the COM objects for speech are created there."""
+
+        # apply the average state to the Ohbot hardware.
+        for joint in self._current_state.MotionState:
+            ohbot.move(joint.joint_id, joint.position)
+        pass
+
     def _enqueue_offset(self, joint_id: int, delta: float, duration_s: float) -> None:
         duration_s = max(0.0, duration_s)
         with self._offset_lock:
@@ -124,40 +127,22 @@ class HardwareObotController(ObotController):
         #Run this at a specified frequency and each loop reduce the time for each active
         #offset until it is at 0, where it can then be removed.
         # Need to Take OffsetRequests and average them
+        duration = 0.1
+
         while not self._stop_event.is_set():
             with self._offset_lock:
-                # From RequestOffset to ActiveOffset
-                for req in self._offset_requests: 
-                    self._active_offsets.append(ActiveOffset(
-                        joint_id=req.joint_id, 
-                        delta=req.delta, 
-                        remaining_s=req.duration_s,
-                        applied=0.0
-                    ))
-                self._offset_requests.clear()
+                for i in range(len(self._offset_requests)):
+                    if self._offset_requests[i].duration_s <= 0:
+                        self._offset_requests.pop(i)
+                    else:
+                        #* Apply the offset relative to the current position, not the hardware's absolute position, so multiple overlapping offsets blend together instead of fighting.
 
-                # Calculate how much movement is applied this frame
-                frame_deltas = {}
-                for active in self._active_offsets:
-                    this_frame = (active.delta - active.applied) / active.remaining_s * 0.05
-                    frame_deltas.setdefault(active.joint_id, []).append(this_frame)
+                        self._current_state[self._offset_requests[i].joint_id].position += self._offset_requests[i].delta
+                        self._current_state[self._offset_requests[i].joint_id].count += 1
 
-                # Averaging and applying movement
-                for joint_id, deltas in frame_deltas.items():
-                    avg_delta = sum(deltas) / len(deltas)
-                    ohbot.move(joint_id, self._neutral_positions[joint_id] + avg_delta)
+                        self._offset_requests[i].duration_s -= duration
 
-                # Subtract used Time and applied Movement
-                for active in self._active_offsets:
-                    active.applied += (active.delta - active.applied) / active.remaining_s * 0.05
-                    active.remaining_s -= 0.05
-
-                ## Remove at 0
-                self._active_offsets = [active for active in self._active_offsets if active.remaining_s > 0]
-
-                await asyncio.sleep(0.05)
-
-            #! Needs @Sir-Kuhnhero to look over
+            time.sleep(duration)
 
 
     async def speak_sentence(self, sentence: str) -> None:
@@ -229,16 +214,6 @@ class HardwareObotController(ObotController):
         self._enqueue_offset(ohbot.LIDBLINK, -5.0, 0.2)
         await asyncio.sleep(0.3)
 
-   # async def wave(self) -> None:
-   #     #* No arm on the Obot, so "wave" is a friendly head waggle (turn side to side).
-   #     print("[action] wave")
-   #     self._enqueue_offset(ohbot.HEADTURN, +3.0, 0.3)
-   #     await asyncio.sleep(0.3)
-   #     self._enqueue_offset(ohbot.HEADTURN, -3.0, 0.6)
-   #     await asyncio.sleep(0.6)
-   #     self._enqueue_offset(ohbot.HEADTURN, +3.0, 0.3)
-   #     await asyncio.sleep(0.3)
-
     async def shake_head(self) -> None:
         print("[action] shake_head")
         self._enqueue_offset(ohbot.HEADTURN, -2.0, 0.5)
@@ -264,13 +239,6 @@ class HardwareObotController(ObotController):
             self._enqueue_offset(ohbot.TOPLIP, -3.0, 1.0)
             self._enqueue_offset(ohbot.BOTTOMLIP, -3.0, 1.0)
             self._enqueue_offset(ohbot.EYETURN, -2.0, 1.0)
-        # Advanced, need to change the voice synthesizer
-        #if emotion == "Happy":
-        #    ohbot.move(ohbot.TOPLIP, 8)
-        #    ohbot.move(ohbot.BOTTOMLIP, 9)
-        #elif emotion == "Sad":
-        #    ohbot.move(ohbot.TOPLIP, 1)
-        #    ohbot.move(ohbot.BOTTOMLIP, 2)
 
 
 class ConsoleObotController(ObotController):
@@ -326,10 +294,6 @@ class ConsoleObotController(ObotController):
     async def wink(self) -> None:
         print("[action] wink")
         await asyncio.sleep(0.2)
-
-   # async def wave(self) -> None:
-   #     print("[action] wave")
-   #     await asyncio.sleep(0.4)
 
     async def shake_head(self) -> None:
         print("[action] shake_head")
