@@ -57,18 +57,21 @@ class StreamProcessor:
             self._sentence_parts.append(part_before)
             position = match.end()
 
+            # handle action tokens
             if token.startswith("["):
                 action_name = token[1:-1].strip()
                 if action_name:
                     self._pending_actions.append(f"{action_name}@{self._current_len()}")
                 continue
 
+            # handle emotion tokens
             if token.startswith("("):
                 emotion_name = token[1:-1].strip()
                 if emotion_name:
                     self._pending_emotions.append(f"{emotion_name}@{self._current_len()}")
                 continue
 
+            # handle delay tokens
             if token.startswith("!Delay"):
                 ms = token[len("!Delay"):]
                 if ms.isdigit():

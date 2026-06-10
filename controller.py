@@ -58,7 +58,6 @@ def _import_ohbot(preferred_port: str | None = None) -> None:
 @dataclass(slots=True)
 class MotionOffset:
     """Relative servo movement request consumed by the blender thread."""
-
     joint_id: int
     delta: float
     duration_s: float
@@ -122,7 +121,6 @@ class HardwareObotController(ObotController):
         
         # Offset Implementation to improve movement and blending multiple actions together
         #TODO Edge Detection for smoother movement 
-        #TODO Considering Movement at Rate instead of snappy jumps to next position
         self._offset_requests: list[MotionOffset] = []
         self._ohbot_lock = threading.Lock()  #* Serialise access to the ohbot library, which is not thread-safe.
         self._offset_lock = threading.Lock()
@@ -191,6 +189,7 @@ class HardwareObotController(ObotController):
             # allows overlapping actions to blend
             with self._ohbot_lock:
                 for joint in motionStates:
+                    #TODO Considering Movement at Rate instead of snappy jumps to next position
                     ohbot.move(joint.joint_id, joint.position)
             
             time.sleep(duration)
