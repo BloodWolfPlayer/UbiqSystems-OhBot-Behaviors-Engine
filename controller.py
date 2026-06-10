@@ -273,14 +273,14 @@ class HardwareObotController(ObotController):
     async def blink(self) -> None:
         print("[action] blink")
         with self._ohbot_lock:
-            self._enqueue_offset(ohbot.LIDBLINK, -5.0, 0.5)
+            self._enqueue_offset(ohbot.LIDBLINK, -8.0, 0.5)
         await asyncio.sleep(0.5)
 
     async def wink(self) -> None:
         #* Obot has a single shared lid servo, so a wink is rendered as a quick, snappier blink the closest the hardware can manage.
         print("[action] wink")
         with self._ohbot_lock:
-            self._enqueue_offset(ohbot.LIDBLINK, -5.0, 0.2)
+            self._enqueue_offset(ohbot.LIDBLINK, -8.0, 0.2)
         await asyncio.sleep(0.3)
 
     async def shake_head(self) -> None:
