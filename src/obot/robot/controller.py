@@ -85,7 +85,7 @@ class ObotController(ABC):
     async def look_right(self) -> None: ...
 
     @abstractmethod
-    async def blink(self) -> None: ...
+    async def blink(self, announce: bool = True) -> None: ...
 
     @abstractmethod
     async def wink(self) -> None: ...
@@ -194,11 +194,13 @@ class HardwareObotController(ObotController):
             time.sleep(duration)
 
     def _auto_blink(self) -> None:
-        # autoblink Thread for automatic blinking between 2 and 5 seconds
+        # autoblink Thread for automatic blinking between 2 and 5 seconds.
+        #* announce=False keeps this ambient blink off the console so it doesn't spam
+        #* the action log during pickers, typing, and interrupts. The servo still moves.
         while not self._stop_event.is_set():
             duration = random.randrange(2, 5)
 
-            asyncio.run(self.blink())
+            asyncio.run(self.blink(announce=False)) #! Change this if you want the blinkeros back
 
             time.sleep(duration)
 
@@ -269,8 +271,9 @@ class HardwareObotController(ObotController):
             self._enqueue_offset(ohbot.EYETURN, -5.0, 1.5)
         await asyncio.sleep(1.5)
 
-    async def blink(self) -> None:
-        print("[action] blink")
+    async def blink(self, announce: bool = True) -> None:
+        if announce:
+            print("[action] blink")
         with self._ohbot_lock:
             self._enqueue_offset(ohbot.LIDBLINK, -8.0, 0.5)
         await asyncio.sleep(0.5)
@@ -360,8 +363,9 @@ class ConsoleObotController(ObotController):
         print("[action][sim] look_right")
         await asyncio.sleep(0.3)
 
-    async def blink(self) -> None:
-        print("[action][sim] blink")
+    async def blink(self, announce: bool = True) -> None:
+        if announce:
+            print("[action][sim] blink")
         await asyncio.sleep(0.2)
 
     async def wink(self) -> None:
