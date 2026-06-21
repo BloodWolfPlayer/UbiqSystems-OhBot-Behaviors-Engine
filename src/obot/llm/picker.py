@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from gemini_client import list_gemini_models
-from ollama_client import list_ollama_models
+from .gemini import list_gemini_models
+from .ollama import list_ollama_models
 
 
 async def pick_gemini_model(api_key: str, recents: list[str]) -> str:

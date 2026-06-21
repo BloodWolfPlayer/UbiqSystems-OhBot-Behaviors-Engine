@@ -8,12 +8,14 @@ from pathlib import Path
 #* Only the lightweight imports live at the top level. The Gemini, Ollama and SSH modules
 #* are imported only inside the functions that need them,
 #* so the scripted demo runs even when httpx, sshtunnel and paramiko are not installed.
-from controller import ConsoleObotController, ObotController
-from llm_client import ScriptedLLMClient
-from orchestrator import RobotPipeline
+from .core.orchestrator import RobotPipeline
+from .llm.client import ScriptedLLMClient
+from .robot.controller import ConsoleObotController, ObotController
 
-SYSTEM_PROMPT_FILE = Path(__file__).resolve().parent / "system_prompt.txt"
-EXAMPLE_SCRIPT_FILE = Path(__file__).resolve().parent / "example_script.txt"
+#* Prompt and script files live at the repo root (two levels up from src/obot/).
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+SYSTEM_PROMPT_FILE = _REPO_ROOT / "system_prompt.txt"
+EXAMPLE_SCRIPT_FILE = _REPO_ROOT / "example_script.txt"
 
 
 def _read_system_prompt() -> str:
@@ -31,7 +33,7 @@ def make_controller(force_console: bool = False, ohbot_port: str = "COM7") -> Ob
     """
     if not force_console:
         try:
-            from controller import HardwareObotController
+            from .robot.controller import HardwareObotController
 
             return HardwareObotController(port=ohbot_port)
         except Exception as exc:
@@ -63,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 async def _scripted_demo(text: str, chunk_size: int, console: bool = False) -> None:
-    from keyboard_interrupt import KeyListener
+    from .audio.keyboard import KeyListener
 
     llm_client = ScriptedLLMClient(text, chunk_size=chunk_size)
     controller = make_controller(force_console=console)
@@ -143,14 +145,14 @@ _CONSOLE_BANNER = (
 
 async def _voice_session(cfg, pipeline: RobotPipeline) -> None:
     """Wire the microphone, interrupt controller and keyboard controls to a pipeline."""
-    from audio_input import (
+    from .audio.input import (
         AudioInput,
         AudioInputError,
         pick_input_device,
         pick_stt_engine,
     )
-    from interrupt import InterruptController
-    from keyboard_interrupt import KeyListener
+    from .audio.keyboard import KeyListener
+    from .core.interrupt import InterruptController
 
     loop = asyncio.get_running_loop()
 
@@ -296,8 +298,8 @@ def _read_console_line() -> str | None:
 
 
 async def _run_gemini(cfg, console: bool = False) -> None:
-    from gemini_client import GeminiAPIError, GeminiLLMClient
-    from model_picker import pick_gemini_model
+    from .llm.gemini import GeminiAPIError, GeminiLLMClient
+    from .llm.picker import pick_gemini_model
 
     try:
         model = await pick_gemini_model(cfg.gemini_api_key, cfg.recent_gemini_models)
@@ -315,9 +317,9 @@ async def _run_gemini(cfg, console: bool = False) -> None:
 
 
 async def _run_ollama(cfg, console: bool = False) -> None:
-    from model_picker import pick_ollama_model
-    from ollama_client import OllamaAPIError, OllamaLLMClient
-    from ssh_tunnel import SSHTunnelError, open_ollama_tunnel
+    from .llm.ollama import OllamaAPIError, OllamaLLMClient
+    from .llm.picker import pick_ollama_model
+    from .net.ssh_tunnel import SSHTunnelError, open_ollama_tunnel
 
     try:
         with open_ollama_tunnel(cfg.ollama_ssh) as bound_port:
@@ -347,7 +349,7 @@ async def main() -> None:
         await _scripted_demo(args.text, args.chunk_size, console=args.console)
         return
 
-    from config import load_config
+    from .config import load_config
 
     try:
         cfg = load_config()

@@ -2,4 +2,4 @@
 # System packages needed:
 #   sudo apt install portaudio19-dev espeak
 # sounddevice needs portaudio19-dev; pyttsx3 needs espeak.
--r requirements-windows.txt
+-r windows.txt

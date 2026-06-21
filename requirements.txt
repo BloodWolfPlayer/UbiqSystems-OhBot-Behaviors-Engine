@@ -1,5 +1,6 @@
-# Use the platform-specific requirements file for your environment:
+# Install the package first:  pip install -e .
+# Then use the platform-specific requirements file for your environment:
 #
-#   Windows testing:  pip install -r requirements-windows.txt
-#   Linux testing:    pip install -r requirements-linux.txt
-#   Raspberry Pi:     pip install -r requirements-pi.txt
+#   Windows testing:  pip install -r requirements/windows.txt
+#   Linux testing:    pip install -r requirements/linux.txt
+#   Raspberry Pi:     pip install -r requirements/pi.txt

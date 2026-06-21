@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import TypeAlias
 
-from controller import ObotController
+from .controller import ObotController
 
 ActionHandler: TypeAlias = Callable[[ObotController], Awaitable[None] | None]
 

@@ -1,15 +1,15 @@
 """Obot voice pipeline skeleton."""
 
-from .actions import default_action_registry
-from .controller import (
+from .core.orchestrator import RobotPipeline
+from .core.processor import StreamProcessor
+from .llm.client import ScriptedLLMClient
+from .robot.actions import default_action_registry
+from .robot.controller import (
     ConsoleObotController,
     DemoObotController,
     HardwareObotController,
     ObotController,
 )
-from .llm_client import ScriptedLLMClient
-from .orchestrator import RobotPipeline
-from .processor import StreamProcessor
 
 __all__ = [
     "ConsoleObotController",

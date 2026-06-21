@@ -3,12 +3,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 
-from actions import ActionRegistry, default_action_registry
-from controller import ObotController
-from interrupt import InterruptController
-from llm_client import LLMClient
-from models import InterruptionResult
-from processor import StreamProcessor
+from ..llm.client import LLMClient
+from ..robot.actions import ActionRegistry, default_action_registry
+from ..robot.controller import ObotController
+from .interrupt import InterruptController
+from .models import InterruptionResult
+from .processor import StreamProcessor
 
 
 def _parse_specs(raw: str) -> list[tuple[str, int]]:

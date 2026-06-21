@@ -86,7 +86,8 @@ def _bump(recents: list[str], model: str) -> list[str]:
 
 
 def _project_root() -> Path:
-    return Path(__file__).resolve().parent
+    #* config.json lives at the repo root, two levels up from src/obot/config.py.
+    return Path(__file__).resolve().parents[2]
 
 
 def load_config() -> Config:

@@ -27,15 +27,42 @@ flowchart LR
     Interrupt --> SpeechQueue
 ```
 
+## Project layout
+
+```
+src/obot/            # the package (run with: python -m obot)
+  __main__.py        # CLI entry point + session loop
+  config.py          # config.json load/save
+  core/              # pipeline: orchestrator, processor, models, interrupt
+  llm/               # LLM sources: client, gemini, ollama, picker
+  robot/             # controller (hardware + console) and action registry
+  audio/             # microphone input and keyboard controls
+  net/               # SSH tunnel for remote Ollama
+requirements/        # per-platform dependency lists (windows, linux, pi)
+docs/                # presentation and design material
+ohbotData/           # robot data (motor defs, sounds) — read by the ohbot library
+system_prompt.txt    # bot persona (edit to change behaviour)
+example_script.txt   # capability-demo script
+config.example.json  # copy to config.json and fill in
+```
+
 ## Quick start
 
 ### 1. Install dependencies
 
+First install the package itself (editable, so `python -m obot` works from the repo root):
+
+```bash
+pip install -e .
+```
+
+Then install the dependencies for your platform:
+
 | Platform | Command |
 |---|---|
-| Windows (dev/testing) | `pip install -r requirements-windows.txt` |
-| Linux (dev/testing) | `pip install -r requirements-linux.txt` |
-| Raspberry Pi (deployment) | `pip install -r requirements-pi.txt` |
+| Windows (dev/testing) | `pip install -r requirements/windows.txt` |
+| Linux (dev/testing) | `pip install -r requirements/linux.txt` |
+| Raspberry Pi (deployment) | `pip install -r requirements/pi.txt` |
 
 > **Linux note:** `sounddevice` and `pyttsx3` need system packages first:
 > ```bash
@@ -54,8 +81,10 @@ cp config.example.json config.json
 
 ### 3. Run
 
+Run from the repo root (so the `ohbotData/` folder and `config.json` are found):
+
 ```bash
-python -m demo
+python -m obot
 ```
 
 ---
@@ -81,7 +110,7 @@ The whole program runs on a plain dev machine, no `ohbot` library, no servos nee
 Force it even when hardware is present by using:
 
 ```bash
-python -m demo --console
+python -m obot --console
 ```
 
 ---
@@ -126,7 +155,7 @@ Option 2: manually set up a model yourself, which is more work but lets you pick
 }
 ```
 
-Forward slashes work on Windows. Relative paths are resolved from where you run `python -m demo`.
+Forward slashes work on Windows. Relative paths are resolved from where you run `python -m obot`.
 
 ### Session controls
 
@@ -196,7 +225,7 @@ Everything else is treated as spoken text, split into sentences on `.`, `!`, and
 ## Quick verification (no API or example file needed)
 
 ```bash
-python -m demo --text "Hello [Nod] (Sad) I am tired. !Delay500 But not for long [Blink]."
+python -m obot --text "Hello [Nod] (Sad) I am tired. !Delay500 But not for long [Blink]."
 ```
 
 Expected output:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from models import PipelineEvent
+from .models import PipelineEvent
 
 #* The four token shapes the processor recognises in the stream.
 #* Order matters here: !Delay\d+ must be tried before the bare [.!?] alternative,

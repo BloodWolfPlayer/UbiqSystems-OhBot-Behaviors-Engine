@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import subprocess
 import sys
 import threading
@@ -8,8 +9,6 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Final
-from unittest import case
-import random
 
 #* ohbot is imported lazily inside HardwareObotController.__init__ so the COM port scan
 #* does not block startup. Module-level None until the hardware controller is first created.

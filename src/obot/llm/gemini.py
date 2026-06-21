@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 
 import httpx
 
-from llm_client import format_interruption_note
+from .client import format_interruption_note
 
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 

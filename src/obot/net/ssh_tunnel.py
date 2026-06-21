@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from config import OllamaSSHConfig
+from ..config import OllamaSSHConfig
 
 
 class SSHTunnelError(RuntimeError):

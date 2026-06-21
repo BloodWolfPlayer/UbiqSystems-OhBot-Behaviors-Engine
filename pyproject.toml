@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "obot"
+version = "0.1.0"
+description = "Voice pipeline for the OhBot chatbot robot: streams LLM responses, parses action/emotion markers, and drives speech and servo motion in real time."
+readme = "README.md"
+requires-python = ">=3.12"
+
+# Runtime dependencies are kept in the per-platform requirements files
+# (requirements/windows.txt, requirements/linux.txt, requirements/pi.txt)
+# because some are hardware/OS specific. Install the package itself with:
+#   pip install -e .
+# then install the deps for your platform, e.g.:
+#   pip install -r requirements/windows.txt
+
+[tool.setuptools.packages.find]
+where = ["src"]
