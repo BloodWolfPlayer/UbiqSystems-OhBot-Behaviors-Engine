@@ -183,6 +183,11 @@ class HardwareObotController(ObotController):
                     motionStates[i].position = averagedPosition + 5.0
                     #print(f"Index: {i}, position: {motionStates[i].position}")
 
+                    if motionStates[i].position < 0.0:
+                        motionStates[i].position = 0.0
+                    elif motionStates[i].position > 10.0:
+                        motionStates[i].position = 10.0                    
+
 
             # apply the average state to the Ohbot hardware.
             # allows overlapping actions to blend
