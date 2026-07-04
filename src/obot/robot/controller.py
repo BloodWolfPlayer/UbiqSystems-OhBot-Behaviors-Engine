@@ -119,7 +119,6 @@ class HardwareObotController(ObotController):
             )
         
         # Offset Implementation to improve movement and blending multiple actions together
-        #TODO Edge Detection for smoother movement 
         self._offset_requests: list[MotionOffset] = []
         self._ohbot_lock = threading.Lock()  #* Serialise access to the ohbot library, which is not thread-safe.
         self._offset_lock = threading.Lock()
@@ -183,11 +182,12 @@ class HardwareObotController(ObotController):
                     motionStates[i].position = averagedPosition + 5.0
                     #print(f"Index: {i}, position: {motionStates[i].position}")
 
+                    #TODO Edge Detection for smoother movement 
+                    #* Primitive Edge Detection, can probably be written better
                     if motionStates[i].position < 0.0:
                         motionStates[i].position = 0.0
                     elif motionStates[i].position > 10.0:
                         motionStates[i].position = 10.0                    
-
 
             # apply the average state to the Ohbot hardware.
             # allows overlapping actions to blend
@@ -257,12 +257,17 @@ class HardwareObotController(ObotController):
     
     async def nod(self) -> None:
         print("[action] nod")
-        with self._ohbot_lock:
-            self._enqueue_offset(ohbot.HEADNOD, +3.0, 0.5)
-        await asyncio.sleep(0.5)
-        with self._ohbot_lock:
-            self._enqueue_offset(ohbot.HEADNOD, -3.0, 0.75)
-        await asyncio.sleep(0.75)
+
+        moveSteps = 5
+        for i in range(moveSteps):
+    
+            with self._ohbot_lock:
+                self._enqueue_offset(ohbot.HEADNOD, +0.6, 0.1)
+            await asyncio.sleep(0.1)
+
+            with self._ohbot_lock:
+                self._enqueue_offset(ohbot.HEADNOD, -0.6, 0.15)
+            await asyncio.sleep(0.15)
 
     async def look_left(self) -> None:
         print("[action] look_left")
@@ -307,7 +312,7 @@ class HardwareObotController(ObotController):
 
     async def set_emotion(self, emotion: str) -> None:
         print(f"[emotion] {emotion}")
-        #TODO still needs work, currently differences in emotion barely noticeable
+        #TODO still needs work, currently differences in emotion barely noticeable. Will require rewrite of the native speak function to allow lip for both emmotions and speech
         ## Emotions basics: Happy, Sad
         ## Need Testing
         if emotion == "Happy":
