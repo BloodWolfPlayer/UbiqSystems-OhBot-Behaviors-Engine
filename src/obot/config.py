@@ -5,6 +5,9 @@ import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from .robot.behaviors import BehaviorSettings
+from .speech.config import MotionSettings, SpeechSettings
+
 CONFIG_FILENAME = "config.json"
 EXAMPLE_FILENAME = "config.example.json"
 #* Hard cap on how many "recent models" we remember per backend.
@@ -37,6 +40,11 @@ class Config:
     recent_gemini_models: list[str] = field(default_factory=list)
     recent_ollama_models: list[str] = field(default_factory=list)
     ohbot_port: str = "COM7"
+    #* Speech stack (TTS engine choice, voices, mouth animation), servo mixing,
+    #* and ambient behavior tunables. All optional in config.json — defaults apply.
+    speech: SpeechSettings = field(default_factory=SpeechSettings)
+    motion: MotionSettings = field(default_factory=MotionSettings)
+    behaviors: BehaviorSettings = field(default_factory=BehaviorSettings)
 
     _path: Path | None = field(default=None, repr=False, compare=False)
 
@@ -70,6 +78,9 @@ class Config:
             "recent_gemini_models": self.recent_gemini_models,
             "recent_ollama_models": self.recent_ollama_models,
             "ohbot_port": self.ohbot_port,
+            "speech": self.speech.to_dict(),
+            "motion": self.motion.to_dict(),
+            "behaviors": self.behaviors.to_dict(),
         }
         #! Atomic write: write to a temp file in the same directory then rename.
         #! Protects the config from being half written if the process is killed mid save.
@@ -121,6 +132,9 @@ def load_config() -> Config:
         recent_gemini_models=list(data.get("recent_gemini_models", [])),
         recent_ollama_models=list(data.get("recent_ollama_models", [])),
         ohbot_port=data.get("ohbot_port", "COM7"),
+        speech=SpeechSettings.from_dict(data.get("speech")),
+        motion=MotionSettings.from_dict(data.get("motion")),
+        behaviors=BehaviorSettings.from_dict(data.get("behaviors")),
     )
     cfg._path = path
     return cfg

@@ -1,30 +1,23 @@
 from __future__ import annotations
 
 import asyncio
-import random
-import subprocess
-import sys
 import threading
-import time
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import Final
+
+from ..core.models import SpeechMarker
+from ..speech.config import MotionSettings, SpeechSettings
+from ..speech.engine import SpeechEngine, estimate_duration_s
+from ..speech.player import PlaybackError
+from ..speech.tts import TTSError
+from . import joints
 
 #* ohbot is imported lazily inside HardwareObotController.__init__ so the COM port scan
 #* does not block startup. Module-level None until the hardware controller is first created.
 ohbot = None  # type: ignore
 
-
-def _kill_espeak() -> None:
-    """Kill any running espeak TTS subprocess so speech stops immediately."""
-    try:
-        if sys.platform == "win32":
-            subprocess.run(["taskkill", "/F", "/IM", "espeak.exe"], capture_output=True, timeout=1)
-            subprocess.run(["taskkill", "/F", "/IM", "espeak-ng.exe"], capture_output=True, timeout=1)
-        else:
-            subprocess.run(["pkill", "-f", "espeak"], capture_output=True, timeout=1)
-    except Exception:
-        pass
+MarkerCallback = Callable[[SpeechMarker], Awaitable[None]]
 
 
 def _import_ohbot(preferred_port: str | None = None) -> None:
@@ -56,24 +49,23 @@ def _import_ohbot(preferred_port: str | None = None) -> None:
 
 @dataclass(slots=True)
 class MotionOffset:
-    """Relative servo movement request consumed by the blender thread."""
+    """Relative servo movement request consumed by the mixer thread."""
     joint_id: int
     delta: float
     duration_s: float
 
-@dataclass(slots=True)
-class MotionState:
-    """Current position of each servo, tracked internally to calculate blended offsets."""
-    joint_id: int
-    position: float
-    count: float
 
 class ObotController(ABC):
     """Robot-facing commands live here."""
 
     @abstractmethod
-    async def speak_sentence(self, sentence: str) -> None:
-        """Speak a completed sentence."""
+    async def speak_sentence(
+        self,
+        sentence: str,
+        markers: Sequence[SpeechMarker] = (),
+        on_marker: MarkerCallback | None = None,
+    ) -> None:
+        """Speak a completed sentence, firing each marker at the matching word."""
 
     @abstractmethod
     async def nod(self) -> None: ...
@@ -96,245 +88,364 @@ class ObotController(ABC):
     @abstractmethod
     async def set_emotion(self, emotion: str) -> None: ...
 
+    def prepare_sentence(self, sentence: str) -> None:
+        """Hint that this sentence will be spoken soon (TTS prefetch). Optional."""
+
+    def turn_finished(self) -> None:
+        """A speaking turn ended; drop cached audio for sentences never voiced."""
+
+    def enqueue_offset(self, joint_id: int, delta: float, duration_s: float) -> bool:
+        """Request a temporary servo offset. Returns False when there are no servos.
+
+        This is the public hook behavior modules use for small ambient motions
+        (sway, eye wander). Controllers without motors simply ignore it.
+        """
+        del joint_id, delta, duration_s
+        return False
+
     async def stop_speaking(self) -> None:
-        """Stop current speech immediately. Override to actually halt TTS."""
+        """Stop current speech at the next word boundary. Override to actually halt TTS."""
 
     def close(self) -> None:
         """Release hardware resources. Override to actually stop threads/hardware."""
 
 
-class HardwareObotController(ObotController):
-    """Drives the physical Obot via the ohbot library (servos + espeak TTS)."""
+class AnimatedObotController(ObotController):
+    """Shared base for controllers with actual joints (hardware servos or the sim face).
 
-    def __init__(self, port: str | None = None):
-        global ohbot
+    Owns two cooperating pieces:
+
+    * the **motor mixer** — a thread that every ``tick_s`` blends all active
+      motion offsets plus the live lip position from speech, applies slew-rate
+      limiting so joints travel at a bounded speed instead of snapping, and
+      writes only joints that actually changed;
+    * the **speech engine** — the custom say(): TTS (Gemini/local), playback,
+      mouth animation, word-timed markers, and word-boundary interruption.
+
+    Subclasses implement :meth:`_write_motor` (serial servo write / sim canvas).
+    """
+
+    def __init__(
+        self,
+        speech_settings: SpeechSettings | None = None,
+        motion_settings: MotionSettings | None = None,
+        gemini_api_key: str = "",
+    ) -> None:
         super().__init__()
-        if ohbot is None:
-            _import_ohbot(port)
-        if ohbot is None:
-            raise RuntimeError(
-                "the 'ohbot' library is not installed, so the hardware controller "
-                "cannot start. Install it on the robot/Pi, or use ConsoleObotController "
-                "(the demo falls back to it automatically)."
-            )
-        
-        # Offset Implementation to improve movement and blending multiple actions together
+        self.motion = motion_settings or MotionSettings()
+        self.speech = SpeechEngine(speech_settings or SpeechSettings(), gemini_api_key)
+
         self._offset_requests: list[MotionOffset] = []
-        self._ohbot_lock = threading.Lock()  #* Serialise access to the ohbot library, which is not thread-safe.
         self._offset_lock = threading.Lock()
+        #* (top_delta, bottom_delta) written by the speech engine's mouth sink;
+        #* read by the mixer thread. Replaced atomically as a tuple.
+        self._lips: tuple[float, float] = (0.0, 0.0)
         self._speech_stopped = threading.Event()
         self._stop_event = threading.Event()
 
-        ohbot.reset()
+        self._mixer_thread = threading.Thread(target=self._mixer_loop, daemon=True)
+        self._mixer_thread.start()
 
-        self._main_thread = threading.Thread(target=self.mainThread, daemon=True)
-        self._autoblink_thread = threading.Thread(target=self._auto_blink, daemon=True)
-        self._main_thread.start()
-        self._autoblink_thread.start()
+    # -- motor mixing ------------------------------------------------------------------
 
-    def close(self) -> None:
-        #* Defensive: if __init__ bailed early (e.g. ohbot missing) these attributes may
-        #* not exist, and __del__ must not raise during garbage collection.
-        stop_event = getattr(self, "_stop_event", None)
-        if stop_event is not None:
-            stop_event.set()
-        main_thread = getattr(self, "_main_thread", None)
-        if main_thread is not None and main_thread.is_alive():
-            main_thread.join(timeout=1.0)
+    @abstractmethod
+    def _write_motor(self, joint_id: int, position: float, speed: int) -> None:
+        """Send one joint position (0..10) to the physical/virtual robot."""
 
-        autoblinkThread = getattr(self, "_autoblink_thread", None)
-        if autoblinkThread is not None and autoblinkThread.is_alive():
-            autoblinkThread.join(timeout=1.0)
-
-    def __del__(self) -> None:
-        self.close()
-
-    def mainThread(self) -> None:
-        """Run a no-op on the main thread to ensure the COM objects for speech are created there."""
-        duration = 0.5
-
-        while not self._stop_event.is_set():
-            with self._offset_lock:
-                motionStates: list[MotionState] = [MotionState(joint_id=i, position=0.0, count=1) for i in range(6)]
-                itemsToRemove = []
-
-                # offset Requests are generated by the Action Functions and processed here
-                # offset is applied relative to current position, servo moves accordingly
-                # duration is reduced each Loop until it runs out and is removed
-                for i in range(len(self._offset_requests)):
-                    if self._offset_requests[i].duration_s <= 0:
-                        # add item that ran out of time to list of items to remove
-                        itemsToRemove.append(self._offset_requests[i])
-                    else:
-                        #* Apply the offset relative to the current position, not the hardware's absolute position, so multiple overlapping offsets blend together instead of fighting.
-
-                        motionStates[self._offset_requests[i].joint_id].position += self._offset_requests[i].delta
-                        motionStates[self._offset_requests[i].joint_id].count += 1
-
-                        self._offset_requests[i].duration_s -= duration
-
-                # remove all items marked as removeal
-                for i in range(len(itemsToRemove)):
-                    self._offset_requests.remove(itemsToRemove[i])
-
-                for i in range(len(motionStates)):
-                    averagedPosition = motionStates[i].position / motionStates[i].count
-                    motionStates[i].position = averagedPosition + 5.0
-                    #print(f"Index: {i}, position: {motionStates[i].position}")
-
-                    #TODO Edge Detection for smoother movement 
-                    #* Primitive Edge Detection, can probably be written better
-                    if motionStates[i].position < 0.0:
-                        motionStates[i].position = 0.0
-                    elif motionStates[i].position > 10.0:
-                        motionStates[i].position = 10.0                    
-
-            # apply the average state to the Ohbot hardware.
-            # allows overlapping actions to blend
-            with self._ohbot_lock:
-                for joint in motionStates:
-                    #TODO Considering Movement at Rate instead of snappy jumps to next position
-                    ohbot.move(joint.joint_id, joint.position)
-            
-            time.sleep(duration)
-
-    def _auto_blink(self) -> None:
-        # autoblink Thread for automatic blinking between 2 and 5 seconds.
-        #* announce=False keeps this ambient blink off the console so it doesn't spam
-        #* the action log during pickers, typing, and interrupts. The servo still moves.
-        while not self._stop_event.is_set():
-            duration = random.randrange(2, 5)
-
-            asyncio.run(self.blink(announce=False)) #! Change this if you want the blinkeros back
-
-            time.sleep(duration)
-
-    def _enqueue_offset(self, joint_id: int, delta: float, duration_s: float) -> None:
-        # Collects Offset Requests
+    def enqueue_offset(self, joint_id: int, delta: float, duration_s: float) -> bool:
         duration_s = max(0.0, duration_s)
         with self._offset_lock:
-            self._offset_requests.append(MotionOffset(joint_id=joint_id, delta=delta, duration_s=duration_s))
+            self._offset_requests.append(
+                MotionOffset(joint_id=joint_id, delta=delta, duration_s=duration_s)
+            )
+        return True
 
+    def _mixer_loop(self) -> None:
+        """Blend offsets + speech lips into joint targets and chase them at a bounded rate."""
+        tick = max(0.01, self.motion.tick_s)
+        current = {j: joints.REST_POSITION for j in joints.ALL_JOINTS}
+        written = dict(current)
 
-    async def speak_sentence(self, sentence: str) -> None:
+        while not self._stop_event.wait(tick):
+            targets = {j: joints.REST_POSITION for j in joints.ALL_JOINTS}
+            sums = {j: 0.0 for j in joints.ALL_JOINTS}
+            counts = {j: 1 for j in joints.ALL_JOINTS}
+
+            with self._offset_lock:
+                expired: list[MotionOffset] = []
+                for req in self._offset_requests:
+                    if req.duration_s <= 0:
+                        expired.append(req)
+                        continue
+                    #* Offsets are blended by averaging (baseline counts once), so
+                    #* overlapping actions soften each other instead of stacking
+                    #* into a slam past the servo limits.
+                    sums[req.joint_id] += req.delta
+                    counts[req.joint_id] += 1
+                    req.duration_s -= tick
+                for req in expired:
+                    self._offset_requests.remove(req)
+
+            for j in joints.ALL_JOINTS:
+                targets[j] = joints.REST_POSITION + sums[j] / counts[j]
+
+            #* Speech lips ride on top of whatever the offsets decided (an emotion
+            #* can hold the mouth corners while the visemes open/close it).
+            lip_top, lip_bottom = self._lips
+            targets[joints.TOPLIP] += lip_top
+            targets[joints.BOTTOMLIP] += lip_bottom
+
+            for j in joints.ALL_JOINTS:
+                target = min(10.0, max(0.0, targets[j]))
+                #* Slew-rate limiting: travel toward the target at a bounded
+                #* positions-per-second speed so motion is smooth, not snappy.
+                #* Lips and lids use a much higher rate — visemes and blinks
+                #* have to hit their pose within a frame or two.
+                rate = (
+                    self.motion.lip_rate_limit
+                    if j in joints.FAST_JOINTS
+                    else self.motion.rate_limit
+                )
+                max_step = rate * tick
+                step = min(max_step, max(-max_step, target - current[j]))
+                current[j] += step
+
+                if abs(current[j] - written[j]) >= self.motion.write_epsilon:
+                    self._write_motor(j, current[j], self.motion.move_speed)
+                    written[j] = current[j]
+
+    # -- speech ------------------------------------------------------------------------
+
+    def _set_lips(self, top_delta: float, bottom_delta: float) -> None:
+        self._lips = (top_delta, bottom_delta)
+
+    def prepare_sentence(self, sentence: str) -> None:
+        if any(ch.isalnum() for ch in sentence):
+            self.speech.prepare(sentence)
+
+    def turn_finished(self) -> None:
+        self.speech.discard_prefetches()
+
+    async def speak_sentence(
+        self,
+        sentence: str,
+        markers: Sequence[SpeechMarker] = (),
+        on_marker: MarkerCallback | None = None,
+    ) -> None:
         print(f"[speech] {sentence}")
         #* Cleared per sentence so a stop from the previous sentence doesn't suppress this one.
         self._speech_stopped.clear()
 
-        if not any(character.isalnum() for character in sentence):
+        if not any(ch.isalnum() for ch in sentence):
             await asyncio.sleep(0.3)
             return
 
-        with self._ohbot_lock:
-            ohbot.setVoice("-vzira")
-            try:
-                #* block=False returns immediately; we wait below so the event loop stays
-                #* free for servo movements, interrupt handling, and emotion changes.
-                ohbot.say(sentence, False, True)
-            except Exception as exc:
-                print(f"[speech] ohbot.say failed: {exc}")
-                return
+        try:
+            result = await self.speech.speak(
+                sentence, markers=markers, on_marker=on_marker, mouth_sink=self._set_lips
+            )
+            if not result.completed:
+                print("[speech] (cut off at word boundary)")
+        except (TTSError, PlaybackError) as exc:
+            #* No audio possible: keep the conversation alive with simulated pacing
+            #* so sentences, interrupts and turn-taking still behave sensibly.
+            print(f"[speech] audio unavailable ({exc}); simulating timing.")
+            await self._simulate_sentence(sentence, markers, on_marker)
 
-        #* Word-count-based estimate is far more accurate than the old char/80 formula.
-        words = len(sentence.split())
-        estimated_duration = words / 2.5 + 0.4
+    async def _simulate_sentence(
+        self,
+        sentence: str,
+        markers: Sequence[SpeechMarker],
+        on_marker: MarkerCallback | None,
+    ) -> None:
+        duration = estimate_duration_s(sentence, self.speech.settings.estimate_wpm)
+        pending = sorted(markers, key=lambda m: m.char_pos)
+        fired: list[asyncio.Task] = []
         elapsed = 0.0
         step = 0.05
-        while elapsed < estimated_duration:
+        length = max(1, len(sentence))
+        while elapsed < duration:
             if self._speech_stopped.is_set():
-                _kill_espeak()
-                return
+                break
+            while pending and (pending[0].char_pos / length) * duration <= elapsed:
+                marker = pending.pop(0)
+                if on_marker is not None:
+                    fired.append(asyncio.create_task(on_marker(marker)))
             await asyncio.sleep(step)
             elapsed += step
+        if fired:
+            await asyncio.gather(*fired, return_exceptions=True)
 
     async def stop_speaking(self) -> None:
         self._speech_stopped.set()
-        _kill_espeak()
+        self.speech.request_stop()
 
-    # OhBot Movement Actions
-    # Each Action generates offset requests for the queue
-    # Includes Servo ID, the Delta (Difference), and Duration
-    
+    def close(self) -> None:
+        #* Defensive: if __init__ bailed early these attributes may not exist,
+        #* and __del__ must not raise during garbage collection.
+        speech = getattr(self, "speech", None)
+        if speech is not None:
+            speech.close()
+        stop_event = getattr(self, "_stop_event", None)
+        if stop_event is not None:
+            stop_event.set()
+        mixer = getattr(self, "_mixer_thread", None)
+        if mixer is not None and mixer.is_alive():
+            mixer.join(timeout=1.0)
+
+    def __del__(self) -> None:
+        self.close()
+
+    # -- movement actions ---------------------------------------------------------------
+    # Each action feeds offset requests into the mixer: joint id, delta, duration.
+
     async def nod(self) -> None:
         print("[action] nod")
 
         moveSteps = 5
-        for i in range(moveSteps):
-    
-            with self._ohbot_lock:
-                self._enqueue_offset(ohbot.HEADNOD, +0.6, 0.1)
+        for _ in range(moveSteps):
+            self.enqueue_offset(joints.HEADNOD, +0.6, 0.1)
             await asyncio.sleep(0.1)
-
-            with self._ohbot_lock:
-                self._enqueue_offset(ohbot.HEADNOD, -0.6, 0.15)
+            self.enqueue_offset(joints.HEADNOD, -0.6, 0.15)
             await asyncio.sleep(0.15)
 
     async def look_left(self) -> None:
         print("[action] look_left")
-        with self._ohbot_lock:
-            self._enqueue_offset(ohbot.EYETURN, +5.0, 1.5)
+        self.enqueue_offset(joints.EYETURN, +5.0, 1.5)
         await asyncio.sleep(1.5)
 
     async def look_right(self) -> None:
         print("[action] look_right")
-        with self._ohbot_lock:
-            self._enqueue_offset(ohbot.EYETURN, -5.0, 1.5)
+        self.enqueue_offset(joints.EYETURN, -5.0, 1.5)
         await asyncio.sleep(1.5)
 
     async def blink(self, announce: bool = True) -> None:
         if announce:
             print("[action] blink")
-        with self._ohbot_lock:
-            self._enqueue_offset(ohbot.LIDBLINK, -8.0, 0.5)
+        self.enqueue_offset(joints.LIDBLINK, -8.0, 0.5)
         await asyncio.sleep(0.5)
 
     async def wink(self) -> None:
-        #* Obot has a single shared lid servo, so a wink is rendered as a quick, snappier blink the closest the hardware can manage.
+        #* Obot has a single shared lid servo, so a wink is rendered as a quick,
+        #* snappier blink — the closest the hardware can manage.
         print("[action] wink")
-        with self._ohbot_lock:
-            self._enqueue_offset(ohbot.LIDBLINK, -8.0, 0.2)
+        self.enqueue_offset(joints.LIDBLINK, -8.0, 0.2)
         await asyncio.sleep(0.3)
 
     async def shake_head(self) -> None:
         print("[action] shake_head")
-        with self._ohbot_lock:
-            self._enqueue_offset(ohbot.HEADTURN, -2.0, 0.5)
-            self._enqueue_offset(ohbot.EYETURN, +2.0, 0.5)
+        self.enqueue_offset(joints.HEADTURN, -2.0, 0.5)
+        self.enqueue_offset(joints.EYETURN, +2.0, 0.5)
         await asyncio.sleep(0.5)
-        with self._ohbot_lock:
-            self._enqueue_offset(ohbot.HEADTURN, +2.0, 1.0)
-            self._enqueue_offset(ohbot.EYETURN, -2.0, 1.0)
+        self.enqueue_offset(joints.HEADTURN, +2.0, 1.0)
+        self.enqueue_offset(joints.EYETURN, -2.0, 1.0)
         await asyncio.sleep(1)
-        with self._ohbot_lock:
-            self._enqueue_offset(ohbot.HEADTURN, -2.0, 0.5)
-            self._enqueue_offset(ohbot.EYETURN, +2.0, 0.5)
+        self.enqueue_offset(joints.HEADTURN, -2.0, 0.5)
+        self.enqueue_offset(joints.EYETURN, +2.0, 0.5)
         await asyncio.sleep(0.5)
 
     async def set_emotion(self, emotion: str) -> None:
         print(f"[emotion] {emotion}")
-        #TODO still needs work, currently differences in emotion barely noticeable. Will require rewrite of the native speak function to allow lip for both emmotions and speech
+        #* Emotions hold the mouth corners/eyes with offsets; speech visemes stack
+        #* on top of them in the mixer, so the face keeps emoting while talking.
         ## Emotions basics: Happy, Sad
         ## Need Testing
         if emotion == "Happy":
-            with self._ohbot_lock:
-                self._enqueue_offset(ohbot.TOPLIP, +3.0, 1.0)
-                self._enqueue_offset(ohbot.BOTTOMLIP, +3.0, 1.0)
-                self._enqueue_offset(ohbot.EYETURN, +2.0, 1.0)
+            self.enqueue_offset(joints.TOPLIP, +3.0, 1.0)
+            self.enqueue_offset(joints.BOTTOMLIP, +3.0, 1.0)
+            self.enqueue_offset(joints.EYETURN, +2.0, 1.0)
         elif emotion == "Sad":
-            with self._ohbot_lock:
-                self._enqueue_offset(ohbot.TOPLIP, -3.0, 1.0)
-                self._enqueue_offset(ohbot.BOTTOMLIP, -3.0, 1.0)
-                self._enqueue_offset(ohbot.EYETURN, -2.0, 1.0)
+            self.enqueue_offset(joints.TOPLIP, -3.0, 1.0)
+            self.enqueue_offset(joints.BOTTOMLIP, -3.0, 1.0)
+            self.enqueue_offset(joints.EYETURN, -2.0, 1.0)
+
+
+class HardwareObotController(AnimatedObotController):
+    """Drives the physical Obot via the ohbot library's servo commands.
+
+    Speech no longer goes through ohbot.say(): audio comes from the
+    SpeechEngine (Gemini TTS or the local voice) played on the host's audio
+    output, and the lips are driven by the mixer like every other joint.
+    """
+
+    def __init__(
+        self,
+        port: str | None = None,
+        speech_settings: SpeechSettings | None = None,
+        motion_settings: MotionSettings | None = None,
+        gemini_api_key: str = "",
+    ):
+        global ohbot
+        if ohbot is None:
+            _import_ohbot(port)
+        if ohbot is None:
+            raise RuntimeError(
+                "the 'ohbot' library is not installed, so the hardware controller "
+                "cannot start. Install it on the robot/Pi, use --sim for the digital "
+                "face, or ConsoleObotController (the demo falls back to it automatically)."
+            )
+
+        #* Serialise access to the ohbot library, which is not thread-safe.
+        self._ohbot_lock = threading.Lock()
+        with self._ohbot_lock:
+            ohbot.reset()
+
+        super().__init__(
+            speech_settings=speech_settings,
+            motion_settings=motion_settings,
+            gemini_api_key=gemini_api_key,
+        )
+
+    def _write_motor(self, joint_id: int, position: float, speed: int) -> None:
+        with self._ohbot_lock:
+            ohbot.move(joint_id, position, speed)
+
+
+class SimulatedObotController(AnimatedObotController):
+    """Digital twin: identical motion/speech pipeline, rendered in the sim window.
+
+    Everything (mixer, speech, lips, behaviors) behaves exactly like the
+    hardware controller — only :meth:`_write_motor` differs, painting a tkinter
+    face instead of writing servo serial commands. Audio still plays on the
+    host speakers, so lip-sync and interruption can be tested without a robot.
+    """
+
+    def __init__(
+        self,
+        face,
+        speech_settings: SpeechSettings | None = None,
+        motion_settings: MotionSettings | None = None,
+        gemini_api_key: str = "",
+    ) -> None:
+        #* Duck-typed face: anything with set_motor(joint_id, position). Normally a
+        #* :class:`obot.sim.face.FaceWindow`.
+        self._face = face
+        super().__init__(
+            speech_settings=speech_settings,
+            motion_settings=motion_settings,
+            gemini_api_key=gemini_api_key,
+        )
+
+    def _write_motor(self, joint_id: int, position: float, speed: int) -> None:
+        del speed
+        self._face.set_motor(joint_id, position)
+
+    def close(self) -> None:
+        super().close()
+        face = getattr(self, "_face", None)
+        if face is not None and hasattr(face, "close"):
+            face.close()
 
 
 class ConsoleObotController(ObotController):
     """Hardware-free controller: prints what the robot *would* do and simulates timing.
 
     This is the reusable "run the whole program without an Obot" path — it needs no
-    ohbot library and no servos, so the full pipeline (LLM streaming, the processor,
-    interruption, and microphone input) can be exercised on a plain dev machine. Speech
-    "playback" is modelled as a short sleep, and :meth:`stop_speaking` lets an interrupt
-    cut that simulated playback short, mirroring the hardware contract.
+    ohbot library, no servos, and no audio output, so the full pipeline (LLM
+    streaming, the processor, interruption, and microphone input) can be exercised
+    on a plain dev machine. Speech "playback" is modelled as a short sleep, and
+    :meth:`stop_speaking` lets an interrupt cut that simulated playback short,
+    mirroring the hardware contract.
     """
 
     def __init__(self) -> None:
@@ -343,20 +454,39 @@ class ConsoleObotController(ObotController):
         #* still-queued one is skipped — the same semantics as the hardware controller.
         self._speech_stopped = threading.Event()
 
-    async def speak_sentence(self, sentence: str) -> None:
+    async def speak_sentence(
+        self,
+        sentence: str,
+        markers: Sequence[SpeechMarker] = (),
+        on_marker: MarkerCallback | None = None,
+    ) -> None:
         print(f"[speech] {sentence}")
         self._speech_stopped.clear()
         #* Roughly track real TTS pacing so barge-in timing feels realistic, but poll the
         #* stop flag so an interrupt can cut the "playback" mid-sentence.
         estimated_duration = min(0.2 + len(sentence) / 80, 1.5)
+        pending = sorted(markers, key=lambda m: m.char_pos)
+        fired: list[asyncio.Task] = []
+        length = max(1, len(sentence))
         elapsed = 0.0
         step = 0.05
         while elapsed < estimated_duration:
             if self._speech_stopped.is_set():
                 print("[speech] (cut off)")
-                return
+                break
+            while pending and (pending[0].char_pos / length) * estimated_duration <= elapsed:
+                marker = pending.pop(0)
+                if on_marker is not None:
+                    fired.append(asyncio.create_task(on_marker(marker)))
             await asyncio.sleep(step)
             elapsed += step
+        else:
+            #* Finished naturally: fire whatever was anchored to the sentence end.
+            for marker in pending:
+                if on_marker is not None:
+                    fired.append(asyncio.create_task(on_marker(marker)))
+        if fired:
+            await asyncio.gather(*fired, return_exceptions=True)
 
     async def stop_speaking(self) -> None:
         self._speech_stopped.set()
@@ -390,7 +520,5 @@ class ConsoleObotController(ObotController):
         print(f"[emotion][sim] {emotion}")
 
 
-#* Backwards-compatible name. Historically the demo used "DemoObotController". resolve it to whichever controller actually works here so old imports keep functioning.
-#todo make sure this is right though.
-#DemoObotController = HardwareObotController if ohbot is not None else ConsoleObotController
+#* Backwards-compatible name for old imports.
 DemoObotController = HardwareObotController

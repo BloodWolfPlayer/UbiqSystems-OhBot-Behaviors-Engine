@@ -5,6 +5,9 @@ paramiko>=3.4
 
 pyttsx3>=2.90
 gTTS>=2.5
+# Neural offline TTS (the everyday voice; Gemini TTS is heavily rate-limited).
+# Voice models are downloaded automatically to ohbotData/piper/ on first use.
+piper-tts>=1.4
 # Microphone input: sounddevice provides cross-platform mic capture (no compiler needed).
 # SpeechRecognition wraps Vosk (offline) and Google (online) speech-to-text engines.
 # The offline engine also needs a model downloaded once from

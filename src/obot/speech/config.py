@@ -1,0 +1,172 @@
+"""Tunable settings for the custom speech stack and robot motion.
+
+Every value that affects how the mouth moves, which voice speaks, and how the
+head motion blends lives here, loaded from the "speech" / "motion" sections of
+config.json. Missing keys fall back to the dataclass defaults, so an old
+config.json keeps working untouched.
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from typing import Any
+
+
+@dataclass
+class MouthSettings:
+    """How loudness maps onto lip servo positions during speech.
+
+    The pipeline is: audio -> RMS envelope (at ``fps`` frames/sec) -> normalise
+    to 0..1 -> noise ``gate`` -> ``gamma`` curve -> attack/release smoothing ->
+    scale by ``top_gain``/``bottom_gain`` into lip deltas above the rest
+    position (5 = mouth closed, 10 = fully open on both lips).
+    """
+
+    fps: float = 25.0            # lip updates per second
+    gate: float = 0.06           # envelope below this fraction of peak counts as silence
+    gamma: float = 0.65          # < 1 opens the mouth more on quiet syllables
+    attack: float = 0.65         # 0..1, how fast the mouth opens (1 = instant)
+    release: float = 0.4         # 0..1, how fast the mouth closes
+    top_gain: float = 3.5        # top lip delta above rest at full loudness (0..5)
+    bottom_gain: float = 4.5     # bottom lip delta above rest at full loudness (0..5)
+    top_max_delta: float = 5.0   # hard cap for the top lip delta
+    bottom_max_delta: float = 5.0
+    sync_offset_s: float = 0.0   # + if lips lag the audio, - if lips run ahead
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "MouthSettings":
+        return _from_dict(cls, data)
+
+
+@dataclass
+class GeminiTTSSettings:
+    model: str = "gemini-2.5-flash-preview-tts"
+    voice: str = "Kore"          # prebuilt voice name (Kore, Puck, Leda, Charon, ...)
+    #* Optional style instruction prepended to the text, e.g.
+    #* "Say this like an upbeat British news presenter:". Empty = plain reading.
+    style: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "GeminiTTSSettings":
+        return _from_dict(cls, data)
+
+
+@dataclass
+class PiperTTSSettings:
+    """Piper: neural TTS running fully offline (Windows PC and the Pi).
+
+    Quality sits between Gemini and the old SAPI voice, with no rate limits.
+    Voices come from the rhasspy/piper-voices collection; ``en_GB-*`` fits the
+    Ms. Mimic persona. ``length_scale`` controls pace (1.0 normal, 0.9 faster).
+    """
+
+    voice: str = "en_GB-cori-high"
+    #* Explicit path to a .onnx voice model. Empty = ohbotData/piper/<voice>.onnx.
+    model_path: str = ""
+    #* Download the voice model automatically on first use (one-time, ~60-100 MB).
+    auto_download: bool = True
+    #* Load the model in the background at startup so the first sentence doesn't
+    #* pay the ~3s model-load cost.
+    warm_up: bool = True
+    length_scale: float = 1.0
+    volume: float = 1.0
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "PiperTTSSettings":
+        return _from_dict(cls, data)
+
+
+@dataclass
+class LocalTTSSettings:
+    voice: str = "zira"          # substring match against installed voice names (SAPI/espeak)
+    rate_wpm: int = 175
+    volume: float = 1.0
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "LocalTTSSettings":
+        return _from_dict(cls, data)
+
+
+@dataclass
+class TTSSettings:
+    #* "auto" = Gemini (when an API key exists) -> Piper -> SAPI/espeak, falling
+    #* through automatically on any failure. Explicit modes pin one engine:
+    #* "gemini", "piper", or "local" (the old SAPI/espeak voice).
+    engine: str = "auto"
+    gemini: GeminiTTSSettings = field(default_factory=GeminiTTSSettings)
+    piper: PiperTTSSettings = field(default_factory=PiperTTSSettings)
+    local: LocalTTSSettings = field(default_factory=LocalTTSSettings)
+    #* After an engine failure, don't retry it for this long (keeps sentences
+    #* flowing on the next voice instead of paying a timeout per sentence).
+    #* Gemini's free tier is ~3 requests/min, so quota errors land here often.
+    failure_cooldown_s: float = 90.0
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "TTSSettings":
+        data = data or {}
+        return cls(
+            engine=str(data.get("engine", cls.engine)),
+            gemini=GeminiTTSSettings.from_dict(data.get("gemini")),
+            piper=PiperTTSSettings.from_dict(data.get("piper")),
+            local=LocalTTSSettings.from_dict(data.get("local")),
+            failure_cooldown_s=float(data.get("failure_cooldown_s", cls.failure_cooldown_s)),
+        )
+
+
+@dataclass
+class SpeechSettings:
+    tts: TTSSettings = field(default_factory=TTSSettings)
+    mouth: MouthSettings = field(default_factory=MouthSettings)
+    #* sounddevice output device index; None = system default speakers.
+    output_device_index: int | None = None
+    #* When interrupted, playback runs to the end of the current word plus this pad.
+    word_stop_pad_s: float = 0.06
+    #* Pacing estimate used when no real audio exists (console controller, TTS failure).
+    estimate_wpm: float = 160.0
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "SpeechSettings":
+        data = data or {}
+        device = data.get("output_device_index")
+        return cls(
+            tts=TTSSettings.from_dict(data.get("tts")),
+            mouth=MouthSettings.from_dict(data.get("mouth")),
+            output_device_index=int(device) if device is not None else None,
+            word_stop_pad_s=float(data.get("word_stop_pad_s", cls.word_stop_pad_s)),
+            estimate_wpm=float(data.get("estimate_wpm", cls.estimate_wpm)),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class MotionSettings:
+    """Servo mixing/blending tunables shared by the hardware and sim controllers."""
+
+    tick_s: float = 0.05         # mixer loop period; 0.05 = 20 updates/sec
+    rate_limit: float = 30.0     # max servo travel in positions/sec (head, eyes)
+    lip_rate_limit: float = 200.0  # lips need to snap much faster than the head
+    write_epsilon: float = 0.05  # skip serial writes smaller than this position change
+    move_speed: int = 10         # ohbot speed argument used for mixer writes
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "MotionSettings":
+        return _from_dict(cls, data)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _from_dict(cls, data: dict[str, Any] | None):
+    """Build a flat dataclass from a dict, keeping defaults for missing/bad keys."""
+    data = data or {}
+    kwargs: dict[str, Any] = {}
+    for name, f in cls.__dataclass_fields__.items():
+        if name not in data:
+            continue
+        try:
+            kwargs[name] = type(f.default)(data[name]) if f.default is not None else data[name]
+        except (TypeError, ValueError):
+            pass
+    return cls(**kwargs)

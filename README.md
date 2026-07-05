@@ -4,12 +4,14 @@ A Python pipeline for the Obot chatbot robot, streams LLM responses, parses acti
 
 ## Design
 
-System is split into four layers:
+System is split into six layers:
 
 1. **LLM source**: produces raw streamed text (Gemini, Ollama, or a scripted replay).
 2. **Stream processor**: removes control tags like `[nod]`, buffers text, and emits sentence/action/emotion events.
 3. **Action registry**: maps action names to dedicated robot motion functions.
-4. **Obot controller**: owns speech and hardware-facing commands. Two implementations: `HardwareObotController` (real servos via the `ohbot` library) and `ConsoleObotController` (prints what the robot would do, for dev/testing).
+4. **Speech engine** (`obot.speech`): our replacement for `ohbot.say()`. Synthesizes each sentence (Gemini TTS or a local offline voice), plays it back interruptibly, animates the lips from the real audio, and fires `[Action]`/`(Emotion)` markers at the exact word they were written on.
+5. **Behavior modules** (`obot.robot.behaviors`): ambient life — blinking, nodding along while you talk to it, subtle sway while speaking, idle eye wandering.
+6. **Obot controller**: owns the motor mixer and hardware-facing commands. Three implementations: `HardwareObotController` (real servos via the `ohbot` library), `SimulatedObotController` (the digital OhBot window), and `ConsoleObotController` (prints what the robot would do).
 
 ## Data Flow
 
@@ -35,7 +37,9 @@ src/obot/            # the package (run with: python -m obot)
   config.py          # config.json load/save
   core/              # pipeline: orchestrator, processor, models, interrupt
   llm/               # LLM sources: client, gemini, ollama, picker
-  robot/             # controller (hardware + console) and action registry
+  robot/             # controllers (hardware/sim/console), actions, behaviors, joints
+  speech/            # custom say(): TTS engines, player, timeline, mouth animation
+  sim/               # digital OhBot: tkinter face window (python -m obot.sim)
   audio/             # microphone input and keyboard controls
   net/               # SSH tunnel for remote Ollama
 requirements/        # per-platform dependency lists (windows, linux, pi)
@@ -103,11 +107,51 @@ Pick one at startup:
 
 ---
 
+## Speech: the custom say()
+
+`ohbot.say()` is no longer used. Speech is handled by `obot.speech.SpeechEngine`:
+
+- **Voices** — three tiers, best first:
+  1. **Gemini TTS** (`"gemini"`): the most natural voices (`Kore`, `Puck`, `Leda`, ...), needs `gemini_api_key`. **Free tier is ~3 requests/minute**, so it can't carry a whole conversation on its own.
+  2. **Piper** (`"piper"`): neural TTS running **fully offline** on the PC and the Pi — close-to-Gemini quality, no rate limits, ~0.1× real-time synthesis after warm-up. Default voice `en_GB-cori-high` (British female, fits Ms. Mimic); the model (~110 MB) downloads automatically to `ohbotData/piper/` on first use. On a Raspberry Pi prefer a `-medium` voice (e.g. `en_GB-alba-medium`). Pace via `length_scale` (0.9 = faster).
+  3. **Basic local** (`"local"`): SAPI/espeak — robotic but dependency-free, the last resort.
+
+  `"auto"` (default) chains all three: Gemini while quota lasts → Piper for the bulk of the conversation → SAPI if everything else breaks. A failing engine is benched for `failure_cooldown_s` so it doesn't add a timeout to every sentence.
+- **Fast output.** While a sentence is playing, the next one is already being synthesized (prefetch), so the Gemini round-trip is hidden behind playback.
+- **Interruption at word boundaries.** Barge-in/SPACE no longer kills the audio mid-phoneme: playback finishes the word being voiced (plus a tiny fade) and goes quiet. The remaining sentences are dropped and the LLM is told what was and wasn't said, as before.
+- **Lip sync.** The mouth is animated from the actual audio: an RMS envelope is gated, curved and smoothed into lip positions. Every parameter (`gate`, `gamma`, `attack`, `release`, gains, fps, sync offset) is tunable in `config.json → speech.mouth` — or live with sliders in the simulator.
+- **Timed actions mid-sentence.** `[Nod]` written between two words fires when that word is actually voiced (char position → word timeline → playback clock), not at a guessed fraction of the sentence.
+
+## Behavior modules
+
+`obot.robot.behaviors.BehaviorManager` runs ambient gestures depending on what the robot is doing (`idle` / `listening` / `speaking`):
+
+| Module | When | What |
+|---|---|---|
+| `auto_blink` | always | periodic blinks, occasional double blink |
+| `listening_nod` | while the user talks | small attentive nods ("mm-hm") |
+| `speaking_sway` | while the bot talks | subtle head/eye drift so it never freezes |
+| `idle_wander` | idle | eyes (sometimes head) wander and linger |
+
+Each module has `enabled`, `min_interval_s`, `max_interval_s`, `intensity` in `config.json → behaviors`. Adding a new module is one entry in `default_modules()`.
+
+---
+
 ## Running without the robot
 
-The whole program runs on a plain dev machine, no `ohbot` library, no servos needed. When `ohbot` cannot be imported, the demo automatically falls back to `ConsoleObotController`, which prints what the robot *would* do (`[speech]`, `[action]`, `[emotion]`) and simulates timing. You can test LLM streaming, interruption, and the microphone path end-to-end without any hardware.
+Two hardware-free options:
 
-Force it even when hardware is present by using:
+**1. The digital OhBot (recommended):**
+
+```bash
+python -m obot --sim            # full pipeline against the simulator window
+python -m obot.sim              # standalone speech/motion test bench
+python -m obot.sim --text "Hello [Nod] world! (Happy) Great to see you."
+```
+
+The window renders head pose, eyes, lids and lips exactly as the mixer would drive the servos, plays the real TTS audio through your speakers, and shows live joint values. The side panel has **mouth tuning sliders** and a **Save to config.json** button — dial in the lip sync there, and the hardware uses the same values. In `python -m obot.sim`, type sentences (tags work) and press Enter while it talks to test word-boundary interruption.
+
+**2. Console only** (no window, no audio): when `ohbot` cannot be imported the demo falls back to `ConsoleObotController`, which prints what the robot *would* do and simulates timing. Force it with:
 
 ```bash
 python -m obot --console
@@ -207,6 +251,16 @@ It will acknowledge the interruption naturally rather than repeating itself.
 | `audio.vosk_model_path` | Path to an unzipped Vosk model directory. Required only for offline STT. Only needed if using custom models.|
 | `recent_gemini_models` | MRU list of Gemini models (last 3). Maintained automatically. |
 | `recent_ollama_models` | Same idea for Ollama. Maintained automatically. |
+| `speech.tts.engine` | `"gemini"`, `"piper"`, `"local"`, or `"auto"` (gemini → piper → local fallback chain). |
+| `speech.tts.gemini.*` | TTS model, prebuilt voice name (`Kore`, `Puck`, `Leda`, ...), optional `style` instruction ("Say this like a British news presenter:"). |
+| `speech.tts.piper.*` | Offline neural voice: `voice` name (auto-downloaded), or explicit `model_path`; `length_scale` = pace; `warm_up` preloads the model at startup. |
+| `speech.tts.local.*` | Basic voice substring (`zira`), speaking rate (wpm), volume. |
+| `speech.mouth.*` | Lip-sync tuning: `gate`, `gamma`, `attack`, `release`, `top_gain`, `bottom_gain`, `fps`, `sync_offset_s`. Tune live in the simulator. |
+| `speech.output_device_index` | sounddevice output device for TTS playback. `null` = default speakers. |
+| `motion.*` | Servo mixer: tick rate, slew-rate limits (head vs lips), write threshold. |
+| `behaviors.*` | Ambient behavior modules — see the table above. |
+
+All of `speech`, `motion` and `behaviors` are optional; missing keys use built-in defaults.
 
 ---
 

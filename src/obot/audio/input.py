@@ -416,6 +416,11 @@ class AudioInput:
 
         #* Set by the demo so an onset while speaking can raise the interrupt.
         self.on_barge_in: Callable[[], None] | None = None
+        #* Fired when the user starts / stops talking, so the behavior manager can
+        #* switch the robot into its attentive "listening" pose (nodding along).
+        #* Called from the capture thread — handlers must be thread-safe.
+        self.on_user_speech_start: Callable[[], None] | None = None
+        self.on_user_speech_end: Callable[[], None] | None = None
 
     # -- lifecycle -------------------------------------------------------------------
 
@@ -551,10 +556,26 @@ class AudioInput:
                 if loud_run >= self._ONSET_FRAMES:
                     if speaking and self.on_barge_in is not None:
                         self.on_barge_in()
-                    return self._record_phrase(stream, sample_rate, [frame_bytes], base_threshold)
+                    self._notify(self.on_user_speech_start)
+                    try:
+                        return self._record_phrase(
+                            stream, sample_rate, [frame_bytes], base_threshold
+                        )
+                    finally:
+                        self._notify(self.on_user_speech_end)
             else:
                 loud_run = 0
         return ""
+
+    @staticmethod
+    def _notify(callback: Callable[[], None] | None) -> None:
+        #* Listener callbacks must never be able to kill the capture loop.
+        if callback is None:
+            return
+        try:
+            callback()
+        except Exception as exc:  # pragma: no cover - user-supplied handler
+            print(f"[mic] listener callback failed: {exc}")
 
     def _record_phrase(
         self,

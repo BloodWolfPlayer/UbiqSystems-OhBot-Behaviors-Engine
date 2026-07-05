@@ -23,6 +23,19 @@ class InterruptionResult:
 
 
 @dataclass(frozen=True)
+class SpeechMarker:
+    """An inline tag ([Nod], (Happy)) anchored to a character position in a sentence.
+
+    The speech engine converts ``char_pos`` into a playback time via the word
+    timeline, so the gesture fires while the matching word is being voiced.
+    """
+
+    kind: Literal["action", "emotion"]
+    name: str
+    char_pos: int
+
+
+@dataclass(frozen=True)
 class StreamChunk:
     """A small piece of raw text streamed from the LLM."""
 

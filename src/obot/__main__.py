@@ -10,6 +10,7 @@ from pathlib import Path
 #* so the scripted demo runs even when httpx, sshtunnel and paramiko are not installed.
 from .core.orchestrator import RobotPipeline
 from .llm.client import ScriptedLLMClient
+from .robot.behaviors import BehaviorManager, BehaviorSettings
 from .robot.controller import ConsoleObotController, ObotController
 
 #* Prompt and script files live at the repo root (two levels up from src/obot/).
@@ -24,18 +25,49 @@ def _read_system_prompt() -> str:
     return SYSTEM_PROMPT_FILE.read_text(encoding="utf-8")
 
 
-def make_controller(force_console: bool = False, ohbot_port: str = "COM7") -> ObotController:
-    """Pick a controller: real hardware when available, console otherwise.
+def make_controller(
+    force_console: bool = False,
+    sim: bool = False,
+    cfg=None,
+) -> ObotController:
+    """Pick a controller: sim window, real hardware, or console prints.
 
-    Passing ``force_console`` (or running on a machine without the ohbot library) gives
-    the hardware-free controller so the whole pipeline — including LLM streaming and the
-    microphone path — can be tested without a robot.
+    ``sim`` opens the digital OhBot face (full speech + motion, no servos).
+    ``force_console`` (or a machine without the ohbot library) gives the
+    print-only controller so the whole pipeline — including LLM streaming and
+    the microphone path — can be tested anywhere.
     """
+    from .speech.config import MotionSettings, SpeechSettings
+
+    speech = cfg.speech if cfg is not None else SpeechSettings()
+    motion = cfg.motion if cfg is not None else MotionSettings()
+    api_key = cfg.gemini_api_key if cfg is not None else ""
+    port = cfg.ohbot_port if cfg is not None else "COM7"
+
+    if sim:
+        try:
+            from .robot.controller import SimulatedObotController
+            from .sim.face import FaceWindow
+
+            face = FaceWindow(
+                mouth_settings=speech.mouth,
+                on_save=(cfg.save if cfg is not None else None),
+                tuning=True,
+            )
+            print("[controller] using the digital OhBot (simulator window).")
+            return SimulatedObotController(
+                face, speech_settings=speech, motion_settings=motion, gemini_api_key=api_key
+            )
+        except Exception as exc:
+            print(f"[controller] simulator unavailable ({exc});")
+
     if not force_console:
         try:
             from .robot.controller import HardwareObotController
 
-            return HardwareObotController(port=ohbot_port)
+            return HardwareObotController(
+                port=port, speech_settings=speech, motion_settings=motion, gemini_api_key=api_key
+            )
         except Exception as exc:
             print(f"[controller] hardware unavailable ({exc});\n"
                   f"[controller] falling back to the console controller.")
@@ -61,15 +93,37 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Force the hardware-free console controller (no ohbot/servos needed).",
     )
+    parser.add_argument(
+        "--sim",
+        action="store_true",
+        help="Use the digital OhBot (simulator window) instead of hardware.",
+    )
     return parser
 
 
-async def _scripted_demo(text: str, chunk_size: int, console: bool = False) -> None:
+def _try_load_config():
+    """Config if present, else None — the scripted demo must run without one."""
+    try:
+        from .config import load_config
+
+        return load_config()
+    except FileNotFoundError:
+        return None
+
+
+async def _scripted_demo(text: str, chunk_size: int, console: bool = False, sim: bool = False) -> None:
     from .audio.keyboard import KeyListener
 
+    cfg = _try_load_config()
     llm_client = ScriptedLLMClient(text, chunk_size=chunk_size)
-    controller = make_controller(force_console=console)
+    controller = make_controller(force_console=console, sim=sim, cfg=cfg)
     pipeline = RobotPipeline(llm_client=llm_client, controller=controller)
+
+    behaviors = BehaviorManager(
+        controller, cfg.behaviors if cfg is not None else BehaviorSettings()
+    )
+    behaviors.start()
+    behaviors.set_speaking(True)
 
     loop = asyncio.get_running_loop()
     quit_event = asyncio.Event()
@@ -102,6 +156,7 @@ async def _scripted_demo(text: str, chunk_size: int, console: bool = False) -> N
         await controller.stop_speaking()
         print("\n[killswitch] Scripted demo stopped.")
 
+    await behaviors.stop()
     controller.close()
 
 
@@ -174,6 +229,15 @@ async def _voice_session(cfg, pipeline: RobotPipeline) -> None:
 
     interrupt = InterruptController(loop)
     audio.on_barge_in = lambda: interrupt.trigger("voice")
+
+    #* Ambient behaviors: blink always; nod along while the user is talking
+    #* (the mic capture thread flips the listening flag); sway subtly while
+    #* speaking; let the eyes wander when idle.
+    behaviors = BehaviorManager(pipeline.controller, cfg.behaviors)
+    audio.on_user_speech_start = lambda: behaviors.set_listening(True)
+    audio.on_user_speech_end = lambda: behaviors.set_listening(False)
+    behaviors.start()
+
     quit_event = asyncio.Event()
     #* Set by the 'c' key (from the listener thread) to flip into typed console mode.
     console_event = asyncio.Event()
@@ -206,21 +270,30 @@ async def _voice_session(cfg, pipeline: RobotPipeline) -> None:
 
     print(_CONTROLS_BANNER)
     try:
-        await _voice_chat_loop(pipeline, audio, interrupt, quit_event, console_event, keys)
+        await _voice_chat_loop(
+            pipeline, audio, interrupt, quit_event, console_event, keys, behaviors
+        )
     finally:
         keys.stop()
         audio.stop()
+        await behaviors.stop()
 
 
-async def _run_turn(pipeline: RobotPipeline, audio, interrupt, user_text: str) -> None:
+async def _run_turn(
+    pipeline: RobotPipeline, audio, interrupt, user_text: str, behaviors=None
+) -> None:
     """Speak one response, allowing barge-in/keyboard interruption."""
     print(f"[you] {user_text}")
     interrupt.clear()
     audio.set_speaking(True)
+    if behaviors is not None:
+        behaviors.set_speaking(True)
     try:
         result = await pipeline.run(user_text, interrupt)
     finally:
         audio.set_speaking(False)
+        if behaviors is not None:
+            behaviors.set_speaking(False)
     if result.interrupted:
         reason = interrupt.signal.reason if interrupt.signal else "?"
         print(f"[interrupted via {reason}] the bot knows it was cut off and what it "
@@ -234,6 +307,7 @@ async def _voice_chat_loop(
     quit_event: asyncio.Event,
     console_event: asyncio.Event,
     keys,
+    behaviors=None,
 ) -> None:
     loop = asyncio.get_running_loop()
     console_mode = False
@@ -254,7 +328,7 @@ async def _voice_chat_loop(
             if line.lower() in ("exit", "quit", ":quit"):
                 print("[killswitch] Exiting.")
                 return
-            await _run_turn(pipeline, audio, interrupt, line)
+            await _run_turn(pipeline, audio, interrupt, line, behaviors)
             continue
 
         #* Voice mode: wait for the next utterance, a quit, or a console-toggle.
@@ -286,7 +360,7 @@ async def _voice_chat_loop(
             print("[killswitch] Exiting.")
             return
         if user_text:
-            await _run_turn(pipeline, audio, interrupt, user_text)
+            await _run_turn(pipeline, audio, interrupt, user_text, behaviors)
 
 
 def _read_console_line() -> str | None:
@@ -297,7 +371,7 @@ def _read_console_line() -> str | None:
         return None
 
 
-async def _run_gemini(cfg, console: bool = False) -> None:
+async def _run_gemini(cfg, console: bool = False, sim: bool = False) -> None:
     from .llm.gemini import GeminiAPIError, GeminiLLMClient
     from .llm.picker import pick_gemini_model
 
@@ -307,7 +381,7 @@ async def _run_gemini(cfg, console: bool = False) -> None:
         print(f"error: {exc}")
         return
     cfg.record_gemini_model(model)
-    controller = make_controller(force_console=console, ohbot_port=cfg.ohbot_port)
+    controller = make_controller(force_console=console, sim=sim, cfg=cfg)
     try:
         async with GeminiLLMClient(cfg.gemini_api_key, model, _read_system_prompt()) as client:
             pipeline = RobotPipeline(llm_client=client, controller=controller)
@@ -316,7 +390,7 @@ async def _run_gemini(cfg, console: bool = False) -> None:
         controller.close()
 
 
-async def _run_ollama(cfg, console: bool = False) -> None:
+async def _run_ollama(cfg, console: bool = False, sim: bool = False) -> None:
     from .llm.ollama import OllamaAPIError, OllamaLLMClient
     from .llm.picker import pick_ollama_model
     from .net.ssh_tunnel import SSHTunnelError, open_ollama_tunnel
@@ -331,7 +405,7 @@ async def _run_ollama(cfg, console: bool = False) -> None:
                 print(f"error: {exc}")
                 return
             cfg.record_ollama_model(model)
-            controller = make_controller(force_console=console, ohbot_port=cfg.ohbot_port)
+            controller = make_controller(force_console=console, sim=sim, cfg=cfg)
             try:
                 async with OllamaLLMClient(base_url, model, _read_system_prompt()) as client:
                     pipeline = RobotPipeline(llm_client=client, controller=controller)
@@ -346,7 +420,7 @@ async def main() -> None:
     args = build_parser().parse_args()
 
     if args.text is not None:
-        await _scripted_demo(args.text, args.chunk_size, console=args.console)
+        await _scripted_demo(args.text, args.chunk_size, console=args.console, sim=args.sim)
         return
 
     from .config import load_config
@@ -359,20 +433,20 @@ async def main() -> None:
 
     choice = _prompt_mode()
     if choice == "1":
-        await _run_gemini(cfg, console=args.console)
+        await _run_gemini(cfg, console=args.console, sim=args.sim)
     elif choice == "2":
-        await _run_ollama(cfg, console=args.console)
+        await _run_ollama(cfg, console=args.console, sim=args.sim)
     elif choice == "3":
         text = input("Scripted text: ").strip()
         if text:
-            await _scripted_demo(text, chunk_size=24, console=args.console)
+            await _scripted_demo(text, chunk_size=24, console=args.console, sim=args.sim)
     else:
         try:
             script = _load_example_script()
         except FileNotFoundError as exc:
             print(f"error: {exc}")
             return
-        await _scripted_demo(script, chunk_size=24, console=args.console)
+        await _scripted_demo(script, chunk_size=24, console=args.console, sim=args.sim)
 
 
 if __name__ == "__main__":
