@@ -29,6 +29,11 @@ public sealed record ModelList
     public List<string> Models { get; init; } = new();
 }
 
+public sealed record EmotionList
+{
+    public List<string> Emotions { get; init; } = new();
+}
+
 public sealed record SpeakTestResult
 {
     public string Engine { get; init; } = "";
@@ -48,6 +53,7 @@ public sealed record SessionState
     public string? Model { get; init; }
     public string? Controller { get; init; }
     public string State { get; init; } = "idle";
+    public string Emotion { get; init; } = "Neutral";
 
     [JsonPropertyName("mic_mode")] public string MicMode { get; init; } = "muted";
     [JsonPropertyName("mic_available")] public bool MicAvailable { get; init; }

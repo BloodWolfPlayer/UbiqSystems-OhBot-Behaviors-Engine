@@ -69,6 +69,10 @@ public static class HelpText
     public const string Reload = "Discard edits and reload the settings currently saved on the engine.";
 
     // -- manual control ------------------------------------------------------------------
+    public const string EmotionsPanel =
+        "Trigger an emotion's default pose directly — the same mouth/eyes/nod bias the LLM's " +
+        "(Emotion) tags apply. It persists (ambient behaviors and speech still layer on top) " +
+        "until you pick another; 'Neutral' clears it back to plain rest. Needs a running session.";
     public const string EnableManualControl =
         "Freeze every motor at its current pose and hand the sliders control. Ambient " +
         "behaviors/speech no longer move a joint once you drag its slider. Needs a running session.";
@@ -101,7 +105,8 @@ public static class HelpText
     public const string PageManualControl =
         "Jog each motor directly and watch its live position — for testing/calibrating servos outside " +
         "a conversation. Enable to freeze every joint where it is, drag sliders to move one, Release to " +
-        "hand control back to ambient behaviors and speech. Needs a running session.";
+        "hand control back to ambient behaviors and speech. The Emotions row above triggers a default " +
+        "mouth/eyes/nod pose directly, the same one the LLM's (Emotion) tags apply. Needs a running session.";
     public const string PageLogs =
         "Everything the engine prints plus structured log/error events, with Info/Warning/Error filters.";
     public const string Intro =

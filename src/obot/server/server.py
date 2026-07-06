@@ -23,6 +23,7 @@ import websockets
 from ..config import Config, config_path
 from ..core import events
 from ..robot import joints
+from ..robot.emotions import EMOTIONS
 from .session import ServerSession
 
 #* Topics forwarded verbatim from the engine's event bus to every connected client.
@@ -149,6 +150,8 @@ class ControlServer:
             "set_joint": self._m_set_joint,
             "release_joint": self._m_release_joint,
             "release_all_joints": self._m_release_all_joints,
+            "list_emotions": self._m_list_emotions,
+            "set_emotion": self._m_set_emotion,
             "get_state": self._m_get_state,
             "ping": self._m_ping,
         }
@@ -263,6 +266,16 @@ class ControlServer:
 
     async def _m_release_all_joints(self, params: dict) -> dict:
         self._require_session().release_all_joints()
+        return {}
+
+    async def _m_list_emotions(self, params: dict) -> dict:
+        return {"emotions": list(EMOTIONS.keys())}
+
+    async def _m_set_emotion(self, params: dict) -> dict:
+        emotion = params.get("emotion", "")
+        if not emotion:
+            raise ValueError("set_emotion needs an 'emotion'.")
+        await self._require_session().set_emotion(emotion)
         return {}
 
     async def _m_get_state(self, params: dict) -> dict:

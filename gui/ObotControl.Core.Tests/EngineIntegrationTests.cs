@@ -89,6 +89,16 @@ public class EngineIntegrationTests
         // Ambient behaviors move joints as soon as a virtual session runs.
         await WaitFor(() => byTopic.ContainsKey(Topics.Joints), TimeSpan.FromSeconds(10), "joints");
 
+        // Emotions: the manual control panel's ListEmotionsAsync/SetEmotionAsync wrappers
+        // round-trip and get_state reflects the applied emotion.
+        var emotionNames = await api.ListEmotionsAsync();
+        Assert.Contains("Sad", emotionNames);
+        Assert.Contains("Neutral", emotionNames);
+        await api.SetEmotionAsync("Sad");
+        var stateAfterSad = await api.GetStateAsync();
+        Assert.Equal("Sad", stateAfterSad.Emotion);
+        await api.SetEmotionAsync("Neutral");
+
         await api.SendTextAsync("Hello there [Nod] (Happy) I am Ms Mimic. "
                                 + "This is a long enough sentence to interrupt. And another one.");
         await WaitFor(() => byTopic.ContainsKey(Topics.Transcript), TimeSpan.FromSeconds(5), "transcript");

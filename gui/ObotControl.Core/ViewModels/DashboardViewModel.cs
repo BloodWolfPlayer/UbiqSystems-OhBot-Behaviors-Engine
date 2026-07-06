@@ -56,6 +56,11 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty] private BotState _state = BotState.Idle;
     [ObservableProperty] private string _activeEngine = "—";
 
+    /// <summary>Emotion currently active on the engine — mirrors get_state/session_start/stop
+    /// so a reconnect to an already-running session shows the real pose, not just "Neutral".
+    /// Kept in sync live too, via the "emotion" event (see HandleEvent below).</summary>
+    [ObservableProperty] private string _emotion = "Neutral";
+
     //* Live "as you talk" line: the interim transcript while the user is still speaking.
     //* Empty/null hides it; committed on the final transcript event.
     [ObservableProperty]
@@ -225,7 +230,11 @@ public partial class DashboardViewModel : ObservableObject
                 break;
             case Topics.Emotion:
                 var em = ObotJson.Deserialize<EmotionEvent>(evt.Data);
-                if (em is not null) Transcript.Add(new TranscriptItem { Kind = TranscriptKind.Emotion, Text = em.Name });
+                if (em is not null)
+                {
+                    Transcript.Add(new TranscriptItem { Kind = TranscriptKind.Emotion, Text = em.Name });
+                    Emotion = em.Name;
+                }
                 break;
             case Topics.Joints:
                 var j = ObotJson.Deserialize<JointsEvent>(evt.Data);
@@ -287,6 +296,7 @@ public partial class DashboardViewModel : ObservableObject
         if (!state.Session) PendingUserText = null;
         MicMode = state.MicMode;
         ActiveEngine = state.TtsEngineActive ?? "—";
+        Emotion = state.Emotion;
         State = state.State switch
         {
             "speaking" => BotState.Speaking,

@@ -61,6 +61,10 @@ public partial class ShellViewModel : ObservableObject
             //* manual-control panel knows whether set_joint/release_joint will succeed.
             if (e.PropertyName == nameof(DashboardViewModel.SessionActive))
                 ManualControl.NotifySessionActive(Dashboard.SessionActive);
+            //* Mirrors get_state/session_start/session_stop's "emotion" field, so a fresh
+            //* session (or a reconnect to one already running) shows the real active pose.
+            else if (e.PropertyName == nameof(DashboardViewModel.Emotion))
+                ManualControl.SyncEmotion(Dashboard.Emotion);
         };
 
         RepoRoot = EngineProcess.LocateRepoRoot();
@@ -205,6 +209,7 @@ public partial class ShellViewModel : ObservableObject
                 Setup.HandleEvent(evt);
                 break;
             case Topics.Joints:
+            case Topics.Emotion:
                 Dashboard.HandleEvent(evt);
                 ManualControl.HandleEvent(evt);
                 break;

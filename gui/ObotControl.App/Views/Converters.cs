@@ -20,4 +20,8 @@ public static class Converters
 
     public static readonly IValueConverter CutOffDecoration = new FuncValueConverter<bool, TextDecorationCollection?>(
         cut => cut ? TextDecorations.Strikethrough : null);
+
+    /// <summary>Highlights the active emotion button in the manual control panel.</summary>
+    public static readonly IValueConverter BoolToAccent = new FuncValueConverter<bool, IBrush>(
+        active => new SolidColorBrush(active ? Color.FromRgb(47, 111, 214) : Color.FromRgb(42, 52, 64)));
 }

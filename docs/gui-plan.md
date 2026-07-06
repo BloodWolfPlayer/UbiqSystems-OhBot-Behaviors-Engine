@@ -94,7 +94,9 @@ Events (server-push): `{ "type":"event", "topic":"state|transcript|speech|joints
 | `interrupt` | — (same path as SPACE/barge-in: word-boundary stop) |
 | `set_mic_mode` | `{mode:"vad"\|"ptt"\|"muted"}` |
 | `set_joint` / `release_joint` / `release_all_joints` | `{joint:"HeadNod"\|...\|id, position:0..10}` → hold/release one joint's absolute position for manual GUI control (a motor test panel); a held joint overrides ambient behaviors/speech until released. Needs an active session. |
-| `get_state` | → `{session, backend, model, state, tts_engine_active}` |
+| `list_emotions` | — → `{emotions:["Neutral","Happy",...]}` (no session needed; static table in `robot/emotions.py`) |
+| `set_emotion` | `{emotion:"Sad"\|...}` → applies that emotion's default mouth/eyes/nod pose, persisting until the next `set_emotion` call (same path the LLM's `(Emotion)` markers use). Needs an active session. |
+| `get_state` | → `{session, backend, model, state, tts_engine_active, emotion}` |
 
 Auth: none, bind 127.0.0.1 only. (LAN/Pi support later: `--host 0.0.0.0` + token param — out of scope now.)
 

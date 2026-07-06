@@ -147,6 +147,36 @@ async def run_checks(port: int, controller: str) -> None:
             await client.call("release_all_joints")
             print("  [ok] release_joint / release_all_joints accepted")
 
+            #* Emotions: applying "Sad" persistently shifts the resting pose away from
+            #* Neutral's own baseline (unlike a one-shot offset, it must not decay), and
+            #* re-selecting "Neutral" returns to exactly that baseline. Compared against
+            #* Neutral's own live value rather than a fixed number, since the exact
+            #* per-emotion deltas (and Neutral's rest-position override itself) are
+            #* hand-tuned and may change -- see robot/emotions.py.
+            names = (await client.call("list_emotions"))["emotions"]
+            assert "Sad" in names and "Neutral" in names
+
+            await client.call("set_emotion", emotion="Neutral")
+            await asyncio.sleep(1.0)
+            neutral_top_lip = client.by_topic["joints"][-1]["TopLip"]
+
+            await client.call("set_emotion", emotion="Sad")
+            sad_top_lip = await _wait_joint_predicate(
+                client, "TopLip", lambda v: abs(v - neutral_top_lip) > 0.3, timeout=5.0
+            )
+            assert sad_top_lip is not None, "TopLip did not move away from Neutral for Sad"
+            await asyncio.sleep(0.5)
+            assert abs(client.by_topic["joints"][-1]["TopLip"] - sad_top_lip) < 0.3, \
+                "Sad pose decayed instead of persisting"
+
+            state_mid = await client.call("get_state")
+            assert state_mid["emotion"] == "Sad"
+
+            await client.call("set_emotion", emotion="Neutral")
+            released = await _wait_joint_value(client, "TopLip", neutral_top_lip, tolerance=0.3, timeout=5.0)
+            assert released, "TopLip did not return to the Neutral baseline"
+            print("  [ok] set_emotion / list_emotions apply and clear a persistent default pose")
+
         await client.call("send_text", text="Hello there [Nod] (Happy) I am Ms Mimic. "
                                             "This is a fairly long test sentence so there is "
                                             "time to interrupt. And one more sentence here.")
@@ -184,6 +214,23 @@ async def _wait_joint_value(client: Client, joint: str, target: float,
         with contextlib.suppress(asyncio.TimeoutError):
             await asyncio.wait_for(client.events.get(), timeout=max(0.1, remaining))
     return False
+
+
+async def _wait_joint_predicate(client: Client, joint: str, predicate, timeout: float):
+    """Poll the latest `joints` frame until predicate(value) holds; returns the
+    matching value, or None on timeout."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        frames = client.by_topic.get("joints", [])
+        if frames:
+            value = frames[-1].get(joint)
+            if value is not None and predicate(value):
+                return value
+        remaining = deadline - loop.time()
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(client.events.get(), timeout=max(0.1, remaining))
+    return None
 
 
 async def _wait_state(client: Client, target: str, timeout: float) -> bool:

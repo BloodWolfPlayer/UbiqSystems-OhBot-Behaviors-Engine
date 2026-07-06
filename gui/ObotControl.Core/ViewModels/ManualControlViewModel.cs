@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ObotControl.Core.Protocol;
@@ -33,6 +34,18 @@ public partial class ManualJointViewModel : ObservableObject
     public event Action<ManualJointViewModel>? TargetChanged;
 
     partial void OnTargetChanged(double value) => TargetChanged?.Invoke(this);
+}
+
+/// <summary>One selectable emotion preset button in the manual control panel.</summary>
+public partial class EmotionOptionViewModel : ObservableObject
+{
+    public EmotionOptionViewModel(string name) => Name = name;
+
+    /// <summary>Emotion name, matching the engine's emotions table (e.g. "Happy", "Neutral").</summary>
+    public string Name { get; }
+
+    /// <summary>True when this is the emotion currently applied on the engine.</summary>
+    [ObservableProperty] private bool _isActive;
 }
 
 /// <summary>
@@ -78,15 +91,26 @@ public partial class ManualControlViewModel : ObservableObject
     }
 
     public ObservableCollection<ManualJointViewModel> Joints { get; } = new();
+    public ObservableCollection<EmotionOptionViewModel> Emotions { get; } = new();
+
+    /// <summary>Name of the emotion currently applied on the engine ("Neutral" = none).</summary>
+    [ObservableProperty] private string _activeEmotion = "Neutral";
+
+    partial void OnActiveEmotionChanged(string value)
+    {
+        foreach (var emotion in Emotions) emotion.IsActive = emotion.Name == value;
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEnable))]
     [NotifyPropertyChangedFor(nameof(CanEdit))]
+    [NotifyPropertyChangedFor(nameof(CanSetEmotion))]
     private bool _connected;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEnable))]
     [NotifyPropertyChangedFor(nameof(CanEdit))]
+    [NotifyPropertyChangedFor(nameof(CanSetEmotion))]
     private bool _sessionActive;
 
     [ObservableProperty]
@@ -99,6 +123,11 @@ public partial class ManualControlViewModel : ObservableObject
 
     /// <summary>True while sliders should accept input and push positions to the engine.</summary>
     public bool CanEdit => Connected && SessionActive && ManualModeActive;
+
+    /// <summary>True while an emotion button can be triggered. Independent of the joint
+    /// manual-mode toggle above: an emotion only shifts the resting bias, so it coexists
+    /// fine with either ambient behaviors or held joints.</summary>
+    public bool CanSetEmotion => Connected && SessionActive;
 
     partial void OnConnectedChanged(bool value) => SyncEditable();
     partial void OnSessionActiveChanged(bool value) => SyncEditable();
@@ -161,6 +190,40 @@ public partial class ManualControlViewModel : ObservableObject
         joint.Target = 5.0;
     }
 
+    // -- emotions --------------------------------------------------------------------------
+
+    /// <summary>Fetch the engine's emotion table once (static list, doesn't need a session).</summary>
+    private async Task LoadEmotionsAsync()
+    {
+        try
+        {
+            var names = await _api.ListEmotionsAsync().ConfigureAwait(false);
+            Emotions.Clear();
+            foreach (var name in names) Emotions.Add(new EmotionOptionViewModel(name));
+            OnActiveEmotionChanged(ActiveEmotion);
+        }
+        catch (Exception ex)
+        {
+            _logs.Append("error", $"list_emotions failed: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    private async Task SetEmotionAsync(string? emotion)
+    {
+        if (string.IsNullOrEmpty(emotion) || !CanSetEmotion) return;
+        try
+        {
+            await _api.SetEmotionAsync(emotion);
+            ActiveEmotion = emotion;
+            _logs.Append("info", $"emotion set: {emotion}");
+        }
+        catch (Exception ex)
+        {
+            _logs.Append("error", $"set_emotion {emotion} failed: {ex.Message}");
+        }
+    }
+
     // -- jogging ---------------------------------------------------------------------------
 
     private void ScheduleSetJoint(ManualJointViewModel joint)
@@ -194,10 +257,20 @@ public partial class ManualControlViewModel : ObservableObject
 
     public void HandleEvent(EngineEvent evt)
     {
-        if (evt.Topic != Topics.Joints) return;
-        var data = ObotJson.Deserialize<JointsEvent>(evt.Data);
-        if (data is null) return;
-        foreach (var joint in Joints) joint.Current = data.Get(joint.Name);
+        if (evt.Topic == Topics.Joints)
+        {
+            var data = ObotJson.Deserialize<JointsEvent>(evt.Data);
+            if (data is null) return;
+            foreach (var joint in Joints) joint.Current = data.Get(joint.Name);
+            return;
+        }
+        if (evt.Topic == Topics.Emotion)
+        {
+            //* Reflects LLM-driven (Emotion) markers too, so this panel's highlighted
+            //* button always matches whatever pose is actually live on the engine.
+            var em = ObotJson.Deserialize<EmotionEvent>(evt.Data);
+            if (em is not null && Emotions.Any(e => e.Name == em.Name)) ActiveEmotion = em.Name;
+        }
     }
 
     /// <summary>Called by the shell whenever the dashboard's session state changes.</summary>
@@ -207,10 +280,20 @@ public partial class ManualControlViewModel : ObservableObject
         if (!active) ManualModeActive = false; // the engine already dropped the controller
     }
 
+    /// <summary>Mirrors the engine's currently-active emotion from get_state / session
+    /// start / stop (called by the shell alongside <see cref="NotifySessionActive"/>).
+    /// Unlike the live "emotion" event below, this value always names a real pose — see
+    /// ObotController.current_emotion on the engine side — so it needs no validation.</summary>
+    public void SyncEmotion(string emotion) => ActiveEmotion = emotion;
+
     public void OnConnectionChanged(bool connected)
     {
         Connected = connected;
-        if (!connected)
+        if (connected)
+        {
+            _ = LoadEmotionsAsync();
+        }
+        else
         {
             SessionActive = false;
             ManualModeActive = false;

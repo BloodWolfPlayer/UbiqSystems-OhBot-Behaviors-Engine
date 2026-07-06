@@ -364,6 +364,12 @@ class ServerSession:
         if self._controller is not None:
             self._controller.release_all_manual_joints()
 
+    async def set_emotion(self, emotion: str) -> None:
+        """Trigger an emotion's default pose -- the same path the LLM's (Emotion)
+        markers use in RobotPipeline, exposed for the GUI's manual control panel."""
+        if self._controller is not None:
+            await self._controller.set_emotion(emotion)
+
     # -- turn worker -------------------------------------------------------------------
 
     async def _mic_consumer_loop(self) -> None:
@@ -443,4 +449,5 @@ class ServerSession:
             "mic_mode": self._mic_mode,
             "mic_available": self._audio is not None,
             "tts_engine_active": self._active_engine,
+            "emotion": self._controller.current_emotion if self._controller is not None else "Neutral",
         }

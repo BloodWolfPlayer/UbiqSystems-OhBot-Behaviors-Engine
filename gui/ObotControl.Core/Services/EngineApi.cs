@@ -72,6 +72,14 @@ public sealed class EngineApi
     /// <summary>Release every manually-held joint at once.</summary>
     public Task ReleaseAllJointsAsync() => _client.CallAsync("release_all_joints");
 
+    /// <summary>Names of every emotion with a default pose (e.g. "Happy", "Sad"), Neutral first.</summary>
+    public async Task<List<string>> ListEmotionsAsync() =>
+        (await _client.CallAsync<EmotionList>("list_emotions").ConfigureAwait(false))!.Emotions;
+
+    /// <summary>Apply an emotion's default mouth/eyes/nod pose — the same path the LLM's
+    /// (Emotion) markers use. Persists until the next call. Needs an active session.</summary>
+    public Task SetEmotionAsync(string emotion) => _client.CallAsync("set_emotion", new { emotion });
+
     public async Task<SessionState> GetStateAsync() =>
         (await _client.CallAsync<SessionState>("get_state").ConfigureAwait(false))!;
 }

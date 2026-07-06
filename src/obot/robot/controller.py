@@ -13,7 +13,7 @@ from ..speech.config import MotionSettings, SpeechSettings
 from ..speech.engine import SpeechEngine, estimate_duration_s
 from ..speech.player import PlaybackError
 from ..speech.tts import TTSError
-from . import joints
+from . import emotions, joints
 
 #* ohbot is imported lazily inside HardwareObotController.__init__ so the COM port scan
 #* does not block startup. Module-level None until the hardware controller is first created.
@@ -59,6 +59,12 @@ class MotionOffset:
 
 class ObotController(ABC):
     """Robot-facing commands live here."""
+
+    #* Name of the last emotion whose pose was actually recognised (see
+    #* emotions.resolve); a plain class attribute so every controller — including
+    #* motor-less ConsoleObotController — has a sensible default without its own
+    #* __init__. Subclasses set an instance attribute of the same name on change.
+    current_emotion: str = "Neutral"
 
     @abstractmethod
     async def speak_sentence(
@@ -153,6 +159,11 @@ class AnimatedObotController(ObotController):
         #* (top_delta, bottom_delta) written by the speech engine's mouth sink;
         #* read by the mixer thread. Replaced atomically as a tuple.
         self._lips: tuple[float, float] = (0.0, 0.0)
+        #* Active emotion's persistent per-joint bias (joint_id -> delta from
+        #* REST_POSITION), set by set_emotion and read every mixer tick. Replaced
+        #* atomically as a whole dict -- same pattern as self._lips above -- so the
+        #* mixer thread never sees a half-written pose.
+        self._emotion_pose: emotions.EmotionPose = {}
         #* joint_id -> absolute position (0..10), set by the GUI's manual control
         #* panel. Wins over offsets/lips for that joint until explicitly released.
         self._manual_overrides: dict[int, float] = {}
@@ -228,6 +239,14 @@ class AnimatedObotController(ObotController):
             targets[joints.TOPLIP] += lip_top
             targets[joints.BOTTOMLIP] += lip_bottom
 
+            #* Active emotion nudges the resting pose itself: everything computed
+            #* above (ambient offsets, lips) targets a plain neutral rest, so adding
+            #* the bias here carries it along -- the face keeps blinking/talking/
+            #* wandering normally, just around a shifted baseline instead of dead center.
+            if self._emotion_pose:
+                for j, delta in self._emotion_pose.items():
+                    targets[j] += delta
+
             #* Manual GUI overrides win outright: a held joint ignores behaviors,
             #* offsets and speech lips until the GUI releases it.
             with self._manual_lock:
@@ -236,7 +255,7 @@ class AnimatedObotController(ObotController):
 
             for j in joints.ALL_JOINTS:
                 #* Limiter later !!!
-                target = targets[j]
+                target = min(10.0, max(0.0, targets[j]))
                 #* Slew-rate limiting: travel toward the target at a bounded
                 #* positions-per-second speed so motion is smooth, not snappy.
                 #* Lips and lids use a much higher rate — visemes and blinks
@@ -412,19 +431,20 @@ class AnimatedObotController(ObotController):
 
     async def set_emotion(self, emotion: str) -> None:
         print(f"[emotion] {emotion}")
+        #* Always announce the raw name -- the transcript chip shows whatever the
+        #* LLM wrote even if it doesn't map to a recognised pose below.
         events.emit(events.EMOTION, {"name": emotion})
-        #* Emotions hold the mouth corners/eyes with offsets; speech visemes stack
-        #* on top of them in the mixer, so the face keeps emoting while talking.
-        ## Emotions basics: Happy, Sad
-        ## Need Testing
-        if emotion == "Happy":
-            self.enqueue_offset(joints.TOPLIP, +3.0, 1.0)
-            self.enqueue_offset(joints.BOTTOMLIP, +3.0, 1.0)
-            self.enqueue_offset(joints.EYETURN, +2.0, 1.0)
-        elif emotion == "Sad":
-            self.enqueue_offset(joints.TOPLIP, -3.0, 1.0)
-            self.enqueue_offset(joints.BOTTOMLIP, -3.0, 1.0)
-            self.enqueue_offset(joints.EYETURN, -2.0, 1.0)
+        #* combined_pose layers NEUTRAL's rest-position override underneath the
+        #* named emotion's own deltas, so recalibrating NEUTRAL shifts every
+        #* emotion's baseline (see emotions.py), not just the plain Neutral state.
+        pose = emotions.combined_pose(emotion)
+        if pose is None:
+            return
+        #* Persistent until the next set_emotion call: unlike enqueue_offset, this
+        #* does not decay, so the face holds the pose for as long as the emotion
+        #* is active (see the mixer's self._emotion_pose blend in _mixer_loop).
+        self.current_emotion = emotion
+        self._emotion_pose = pose
 
 
 class HardwareObotController(AnimatedObotController):
@@ -617,6 +637,8 @@ class ConsoleObotController(ObotController):
     async def set_emotion(self, emotion: str) -> None:
         print(f"[emotion][sim] {emotion}")
         events.emit(events.EMOTION, {"name": emotion})
+        if emotions.resolve(emotion) is not None:
+            self.current_emotion = emotion
 
 
 #* Backwards-compatible name for old imports.
