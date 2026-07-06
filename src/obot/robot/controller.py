@@ -329,12 +329,10 @@ class AnimatedObotController(ObotController):
         print("[action] nod")
         events.emit(events.ACTION, {"name": "nod"})
 
-        moveSteps = 5
-        for _ in range(moveSteps):
-            self.enqueue_offset(joints.HEADNOD, +0.6, 0.1)
-            await asyncio.sleep(0.1)
-            self.enqueue_offset(joints.HEADNOD, -0.6, 0.15)
-            await asyncio.sleep(0.15)
+        self.enqueue_offset(joints.HEADNOD, +3, 0.5)
+        await asyncio.sleep(0.5)
+        self.enqueue_offset(joints.HEADNOD, -3, 0.75)
+        await asyncio.sleep(0.75)
 
     async def look_left(self) -> None:
         print("[action] look_left")
@@ -354,7 +352,7 @@ class AnimatedObotController(ObotController):
             #* Only script/marker-driven blinks are announced; ambient auto_blink
             #* passes announce=False so it stays off both the console and the event feed.
             events.emit(events.ACTION, {"name": "blink"})
-        self.enqueue_offset(joints.LIDBLINK, -8.0, 0.5)
+        self.enqueue_offset(joints.LIDBLINK, -10.0, 0.5)
         await asyncio.sleep(0.5)
 
     async def wink(self) -> None:
@@ -362,7 +360,7 @@ class AnimatedObotController(ObotController):
         #* snappier blink — the closest the hardware can manage.
         print("[action] wink")
         events.emit(events.ACTION, {"name": "wink"})
-        self.enqueue_offset(joints.LIDBLINK, -8.0, 0.2)
+        self.enqueue_offset(joints.LIDBLINK, -10.0, 0.2)
         await asyncio.sleep(0.3)
 
     async def shake_head(self) -> None:
