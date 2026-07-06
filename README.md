@@ -235,6 +235,69 @@ It will acknowledge the interruption naturally rather than repeating itself.
 
 ---
 
+## Desktop GUI
+
+A cross-platform desktop GUI for the whole workflow (setup, config, live conversation)
+lives in [gui/](gui/) — a single **Avalonia** app (`ObotControl.App`) that runs natively on
+Windows, Linux and the Pi, a thin client over the shared `ObotControl.Core`
+(see [gui/README.md](gui/README.md)). Quick start:
+
+```bash
+cd gui
+dotnet run --project ObotControl.App/ObotControl.App.csproj
+```
+
+Then click **Launch engine** (or **Attach**) — the GUI drives everything below over the
+control server. You can also run the server standalone:
+
+## GUI control server (`--serve`)
+
+The GUI does not re-implement any of the engine. Instead the engine exposes itself over a
+local WebSocket and the GUI is a thin client. Start the server with:
+
+```bash
+python -m obot --serve                 # headless "virtual" controller, ws://127.0.0.1:8765
+python -m obot --serve --console       # no motion/audio (fastest; good for protocol tests)
+python -m obot --serve --sim           # default controller opens the tkinter face window
+python -m obot --serve --port 9000     # pick the port
+```
+
+It binds to `127.0.0.1` only (no auth by design; LAN/Pi mode is a later milestone).
+`--sim`/`--console` set the **default** controller; a `session_start` call can override
+it per session (`virtual`, `sim`, `hardware`, or `console`). `virtual` runs the full
+motor mixer and real TTS with no window and streams joint positions on the `joints`
+event topic, so a GUI can draw the face itself.
+
+**Protocol.** Requests `{"type":"call","id":1,"method":"...","params":{...}}` get a
+`{"type":"result","id":1,"ok":true,"data":{...}}` (or `"ok":false,"error":"..."`).
+The server also pushes `{"type":"event","topic":"...","data":{...}}` for
+`state` (idle/listening/speaking), `transcript`, `speech` (sentence + active TTS
+engine + cut-off markers), `action`, `emotion`, `joints` (~15 Hz), `miclevel`, `log`
+and `error`.
+
+| Method | Purpose |
+|---|---|
+| `get_config` / `set_config` | full JSON ⇄ validated + atomically saved; hot-applies `speech.mouth`, `motion`, `behaviors` to a running session |
+| `list_mics` / `test_mic` | enumerate mics; `test_mic {index}` streams `miclevel` events for ~3 s |
+| `list_gemini_models` / `list_ollama_models` | live model lists (key / SSH tunnel from config) |
+| `list_tts_voices` / `speak_test` | voices per engine; synthesize a test sentence on the host |
+| `session_start` / `session_stop` | `{backend, model, controller}` — start/stop a conversation |
+| `send_text` / `interrupt` / `set_mic_mode` | one typed turn; word-boundary interrupt; `vad`/`ptt`/`muted` |
+| `get_state` | `{session, backend, model, controller, state, mic_mode, tts_engine_active}` |
+
+**Smoke test** (no robot, no API key needed — runs against a scripted backend):
+
+```bash
+OhBots/Scripts/python.exe tests/test_server_smoke.py                 # controller=virtual
+OhBots/Scripts/python.exe tests/test_server_smoke.py --controller console
+```
+
+It spawns its own server, reads config, lists mics/voices/models, starts a session,
+sends a turn, checks `transcript`/`state`/`speech`/`joints` events, interrupts
+mid-speech, and stops. Exit code 0 = all checks passed.
+
+---
+
 ## `config.json` fields
 
 | Field | Meaning |

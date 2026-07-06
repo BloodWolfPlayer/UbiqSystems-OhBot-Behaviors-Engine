@@ -1,0 +1,212 @@
+"""End-to-end smoke test for the ``python -m obot --serve`` control server.
+
+Launches the server as a child process (no robot required), then drives the full
+protocol over a WebSocket: read config, list mics/voices/models, start a
+scripted-backend session, send a typed turn, observe ``transcript``/``state``/
+``speech``/``joints`` events, interrupt mid-speech, and stop.
+
+Run it directly (spawns its own server):
+
+    OhBots/Scripts/python.exe tests/test_server_smoke.py                 # controller=virtual
+    OhBots/Scripts/python.exe tests/test_server_smoke.py --controller console
+    OhBots/Scripts/python.exe tests/test_server_smoke.py --controller sim  # opens the face window
+
+Or point it at an already-running server:  ... --attach 8765
+
+Exit code 0 = all checks passed.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import contextlib
+import socket
+import subprocess
+import sys
+from pathlib import Path
+
+import websockets
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+class Client:
+    """Minimal RPC client: one reader task demultiplexes results (by id) from events."""
+
+    def __init__(self, ws) -> None:
+        self._ws = ws
+        self._next_id = 0
+        self._pending: dict[int, asyncio.Future] = {}
+        self.events: asyncio.Queue = asyncio.Queue()
+        self.by_topic: dict[str, list] = {}
+        self._reader = asyncio.create_task(self._read_loop())
+
+    async def _read_loop(self) -> None:
+        import json
+        with contextlib.suppress(websockets.ConnectionClosed, asyncio.CancelledError):
+            async for raw in self._ws:
+                msg = json.loads(raw)
+                if msg.get("type") == "result":
+                    fut = self._pending.pop(msg.get("id"), None)
+                    if fut and not fut.done():
+                        fut.set_result(msg)
+                elif msg.get("type") == "event":
+                    self.by_topic.setdefault(msg["topic"], []).append(msg.get("data"))
+                    await self.events.put(msg)
+
+    async def call(self, method: str, **params):
+        import json
+        self._next_id += 1
+        req_id = self._next_id
+        fut = asyncio.get_running_loop().create_future()
+        self._pending[req_id] = fut
+        await self._ws.send(json.dumps({"type": "call", "id": req_id,
+                                        "method": method, "params": params}))
+        reply = await asyncio.wait_for(fut, timeout=30)
+        if not reply.get("ok"):
+            raise RuntimeError(f"{method} failed: {reply.get('error')}")
+        return reply.get("data")
+
+    async def wait_topic(self, topic: str, timeout: float = 10.0) -> None:
+        """Block until at least one event on ``topic`` has been seen."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while not self.by_topic.get(topic):
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise AssertionError(f"timed out waiting for a '{topic}' event")
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(self.events.get(), timeout=remaining)
+
+    async def close(self) -> None:
+        self._reader.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await self._reader
+        await self._ws.close()
+
+
+async def _wait_port(port: int, timeout: float = 30.0) -> None:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        try:
+            ws = await websockets.connect(f"ws://127.0.0.1:{port}")
+            await ws.close()
+            return
+        except OSError:
+            await asyncio.sleep(0.25)
+    raise TimeoutError(f"server did not open port {port} within {timeout}s")
+
+
+async def run_checks(port: int, controller: str) -> None:
+    ws = await websockets.connect(f"ws://127.0.0.1:{port}", max_size=4 * 1024 * 1024)
+    client = Client(ws)
+    try:
+        assert (await client.call("ping"))["pong"] is True
+
+        cfg = await client.call("get_config")
+        assert "speech" in cfg and "motion" in cfg, "get_config returned an unexpected shape"
+        print(f"  [ok] get_config ({len(cfg)} top-level keys)")
+
+        mics = (await client.call("list_mics"))["mics"]
+        print(f"  [ok] list_mics -> {len(mics)} device(s)")
+
+        voices = await client.call("list_tts_voices")
+        assert set(voices) >= {"gemini", "piper", "local"}
+        print(f"  [ok] list_tts_voices (gemini={len(voices['gemini'])}, "
+              f"piper={len(voices['piper'])}, local={len(voices['local'])})")
+
+        #* Models need a key/tunnel; just confirm the RPC round-trips (ok or a clean error).
+        with contextlib.suppress(RuntimeError):
+            g = await client.call("list_gemini_models")
+            print(f"  [ok] list_gemini_models -> {len(g['models'])}")
+
+        state = await client.call("session_start", backend="scripted",
+                                  model="", controller=controller)
+        assert state["session"] is True and state["controller"] == controller
+        print(f"  [ok] session_start (backend=scripted, controller={controller})")
+
+        if controller in ("virtual", "sim", "hardware"):
+            await client.wait_topic("joints", timeout=10.0)
+            print(f"  [ok] joints events streaming ({len(client.by_topic['joints'])} so far)")
+
+        await client.call("send_text", text="Hello there [Nod] (Happy) I am Ms Mimic. "
+                                            "This is a fairly long test sentence so there is "
+                                            "time to interrupt. And one more sentence here.")
+        await client.wait_topic("transcript", timeout=5.0)
+        assert client.by_topic["transcript"][0]["text"].startswith("Hello there")
+        print("  [ok] transcript event for the typed turn")
+
+        await client.wait_topic("state", timeout=10.0)
+        await client.wait_topic("speech", timeout=10.0)
+        print("  [ok] state + speech events during the turn")
+
+        #* Interrupt mid-speech and confirm the turn winds down (idle again).
+        await asyncio.sleep(0.4)
+        await client.call("interrupt")
+        idle_seen = await _wait_state(client, "idle", timeout=15.0)
+        assert idle_seen, "session did not return to idle after interrupt"
+        print("  [ok] interrupt -> back to idle")
+
+        stopped = await client.call("session_stop")
+        assert stopped["session"] is False
+        print("  [ok] session_stop")
+    finally:
+        await client.close()
+
+
+async def _wait_state(client: Client, target: str, timeout: float) -> bool:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        states = [e["state"] for e in client.by_topic.get("state", [])]
+        if target in states:
+            return True
+        remaining = deadline - loop.time()
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(client.events.get(), timeout=max(0.1, remaining))
+    return target in [e["state"] for e in client.by_topic.get("state", [])]
+
+
+async def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--controller", default="virtual",
+                        choices=["virtual", "sim", "console", "hardware"])
+    parser.add_argument("--attach", type=int, default=None,
+                        help="Connect to an already-running server on this port instead of spawning one.")
+    args = parser.parse_args()
+
+    if args.attach is not None:
+        print(f"Attaching to existing server on port {args.attach} (controller={args.controller})")
+        await run_checks(args.attach, args.controller)
+        print("\nALL CHECKS PASSED")
+        return 0
+
+    port = _free_port()
+    print(f"Launching: {sys.executable} -m obot --serve --port {port}")
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "obot", "--serve", "--port", str(port)],
+        cwd=str(_REPO_ROOT),
+    )
+    try:
+        await _wait_port(port)
+        await run_checks(port, args.controller)
+        print("\nALL CHECKS PASSED")
+        return 0
+    finally:
+        proc.terminate()
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=10)
+        if proc.poll() is None:
+            proc.kill()
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(main()))

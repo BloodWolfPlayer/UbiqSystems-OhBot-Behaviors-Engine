@@ -31,7 +31,6 @@
 (Sad) It makes me quite sad that you would even question my humanity. [Blink] Truly, it stings a little.
 
 # --- Scene 8: Shout for emphasis (Shouting) ---
-!Delay300
 (Shouting) I AM ONE HUNDRED PERCENT HUMAN AND I WILL NOT BE TAKING ANY MORE QUESTIONS! [Nod] Thank you.
 
 # --- Scene 9: Wrap up (Happy) ---

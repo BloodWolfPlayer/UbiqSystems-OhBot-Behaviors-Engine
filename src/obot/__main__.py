@@ -98,6 +98,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use the digital OhBot (simulator window) instead of hardware.",
     )
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="Run the WebSocket control server for the GUI instead of the console app.",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host the control server binds to (default 127.0.0.1; --serve only).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8765,
+        help="Port the control server listens on (default 8765; --serve only).",
+    )
     return parser
 
 
@@ -418,6 +434,15 @@ async def _run_ollama(cfg, console: bool = False, sim: bool = False) -> None:
 
 async def main() -> None:
     args = build_parser().parse_args()
+
+    if args.serve:
+        from .server import serve
+
+        #* The CLI --sim/--console flags choose the server's *default* controller; a
+        #* session_start RPC can still override it per session.
+        default_controller = "sim" if args.sim else "console" if args.console else "virtual"
+        await serve(host=args.host, port=args.port, default_controller=default_controller)
+        return
 
     if args.text is not None:
         await _scripted_demo(args.text, args.chunk_size, console=args.console, sim=args.sim)

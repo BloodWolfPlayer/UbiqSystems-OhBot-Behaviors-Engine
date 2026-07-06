@@ -1,0 +1,30 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ObotControl.App.App"
+             RequestedThemeVariant="Dark">
+  <Application.Styles>
+    <FluentTheme />
+
+    <!-- App-wide polish: rounder controls, comfortable padding, a consistent accent. -->
+    <Style Selector="Button">
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="12,6" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="TabItem">
+      <Setter Property="FontSize" Value="15" />
+    </Style>
+  </Application.Styles>
+
+  <Application.Resources>
+    <Color x:Key="SystemAccentColor">#3B82F6</Color>
+    <Color x:Key="SystemAccentColorDark1">#2F6FD6</Color>
+    <Color x:Key="SystemAccentColorDark2">#2760BC</Color>
+    <Color x:Key="SystemAccentColorDark3">#1F4E9E</Color>
+  </Application.Resources>
+</Application>

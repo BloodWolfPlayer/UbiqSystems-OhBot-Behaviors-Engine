@@ -1,0 +1,13 @@
+<Project>
+  <!-- Shared MSBuild settings for every project in the ObotControl solution. -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- Central version so both GUIs and the Core report the same build. -->
+    <Version>0.1.0</Version>
+    <Authors>UbiqSystems</Authors>
+    <Product>OhBot Control</Product>
+  </PropertyGroup>
+</Project>

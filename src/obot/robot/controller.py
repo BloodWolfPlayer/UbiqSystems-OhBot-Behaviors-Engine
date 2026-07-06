@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
+from ..core import events
 from ..core.models import SpeechMarker
 from ..speech.config import MotionSettings, SpeechSettings
 from ..speech.engine import SpeechEngine, estimate_duration_s
@@ -165,6 +167,10 @@ class AnimatedObotController(ObotController):
         tick = max(0.01, self.motion.tick_s)
         current = {j: joints.REST_POSITION for j in joints.ALL_JOINTS}
         written = dict(current)
+        #* Joint stream for the GUI face preview, throttled to ~15 Hz and only built
+        #* when something is actually listening (the console/hardware flow pays nothing).
+        last_emit = 0.0
+        emit_period = 1.0 / 15.0
 
         while not self._stop_event.wait(tick):
             targets = {j: joints.REST_POSITION for j in joints.ALL_JOINTS}
@@ -214,6 +220,16 @@ class AnimatedObotController(ObotController):
                     self._write_motor(j, current[j], self.motion.move_speed)
                     written[j] = current[j]
 
+            #* Stream the smoothed pose so a GUI can mirror the face. Gated so the
+            #* dict is not even built when unobserved; throttled below the tick rate.
+            now = time.monotonic()
+            if now - last_emit >= emit_period and events.has_subscribers(events.JOINTS):
+                last_emit = now
+                events.emit(
+                    events.JOINTS,
+                    {joints.JOINT_NAMES[j]: round(current[j], 3) for j in joints.ALL_JOINTS},
+                )
+
     # -- speech ------------------------------------------------------------------------
 
     def _set_lips(self, top_delta: float, bottom_delta: float) -> None:
@@ -233,6 +249,9 @@ class AnimatedObotController(ObotController):
         on_marker: MarkerCallback | None = None,
     ) -> None:
         print(f"[speech] {sentence}")
+        #* Announce the sentence up front so a GUI shows the bot bubble with no latency;
+        #* the active engine is only known once synthesis returns (emitted below).
+        events.emit(events.SPEECH, {"text": sentence, "event": "spoken", "engine": None})
         #* Cleared per sentence so a stop from the previous sentence doesn't suppress this one.
         self._speech_stopped.clear()
 
@@ -246,11 +265,18 @@ class AnimatedObotController(ObotController):
             )
             if not result.completed:
                 print("[speech] (cut off at word boundary)")
+            events.emit(events.SPEECH, {
+                "text": sentence,
+                "event": "cutoff" if not result.completed else "done",
+                "engine": result.engine,
+            })
         except (TTSError, PlaybackError) as exc:
             #* No audio possible: keep the conversation alive with simulated pacing
             #* so sentences, interrupts and turn-taking still behave sensibly.
             print(f"[speech] audio unavailable ({exc}); simulating timing.")
+            events.emit(events.LOG, {"level": "warn", "message": f"audio unavailable ({exc}); simulating timing."})
             await self._simulate_sentence(sentence, markers, on_marker)
+            events.emit(events.SPEECH, {"text": sentence, "event": "done", "engine": None})
 
     async def _simulate_sentence(
         self,
@@ -301,6 +327,7 @@ class AnimatedObotController(ObotController):
 
     async def nod(self) -> None:
         print("[action] nod")
+        events.emit(events.ACTION, {"name": "nod"})
 
         moveSteps = 5
         for _ in range(moveSteps):
@@ -311,17 +338,22 @@ class AnimatedObotController(ObotController):
 
     async def look_left(self) -> None:
         print("[action] look_left")
+        events.emit(events.ACTION, {"name": "look_left"})
         self.enqueue_offset(joints.EYETURN, +5.0, 1.5)
         await asyncio.sleep(1.5)
 
     async def look_right(self) -> None:
         print("[action] look_right")
+        events.emit(events.ACTION, {"name": "look_right"})
         self.enqueue_offset(joints.EYETURN, -5.0, 1.5)
         await asyncio.sleep(1.5)
 
     async def blink(self, announce: bool = True) -> None:
         if announce:
             print("[action] blink")
+            #* Only script/marker-driven blinks are announced; ambient auto_blink
+            #* passes announce=False so it stays off both the console and the event feed.
+            events.emit(events.ACTION, {"name": "blink"})
         self.enqueue_offset(joints.LIDBLINK, -8.0, 0.5)
         await asyncio.sleep(0.5)
 
@@ -329,11 +361,13 @@ class AnimatedObotController(ObotController):
         #* Obot has a single shared lid servo, so a wink is rendered as a quick,
         #* snappier blink — the closest the hardware can manage.
         print("[action] wink")
+        events.emit(events.ACTION, {"name": "wink"})
         self.enqueue_offset(joints.LIDBLINK, -8.0, 0.2)
         await asyncio.sleep(0.3)
 
     async def shake_head(self) -> None:
         print("[action] shake_head")
+        events.emit(events.ACTION, {"name": "shake_head"})
         self.enqueue_offset(joints.HEADTURN, -2.0, 0.5)
         self.enqueue_offset(joints.EYETURN, +2.0, 0.5)
         await asyncio.sleep(0.5)
@@ -346,6 +380,7 @@ class AnimatedObotController(ObotController):
 
     async def set_emotion(self, emotion: str) -> None:
         print(f"[emotion] {emotion}")
+        events.emit(events.EMOTION, {"name": emotion})
         #* Emotions hold the mouth corners/eyes with offsets; speech visemes stack
         #* on top of them in the mixer, so the face keeps emoting while talking.
         ## Emotions basics: Happy, Sad
@@ -437,6 +472,23 @@ class SimulatedObotController(AnimatedObotController):
             face.close()
 
 
+class VirtualObotController(AnimatedObotController):
+    """Headless twin: the full motor mixer + speech pipeline with no on-host window.
+
+    Identical to :class:`SimulatedObotController` in every way that matters — mixer,
+    slew limiting, real TTS audio on the host speakers, lip-sync, behaviors — but it
+    renders nowhere. The joint positions are streamed on the ``joints`` event topic
+    instead, so a remote GUI can draw the face itself (``--serve`` + face preview).
+    This is the sensible controller for the control server on a machine without the
+    robot and without wanting the tkinter sim window to pop up.
+    """
+
+    def _write_motor(self, joint_id: int, position: float, speed: int) -> None:
+        #* No physical or on-screen output: the mixer still computes and emits every
+        #* joint's position (see _mixer_loop), which is all a GUI face preview needs.
+        del joint_id, position, speed
+
+
 class ConsoleObotController(ObotController):
     """Hardware-free controller: prints what the robot *would* do and simulates timing.
 
@@ -461,6 +513,7 @@ class ConsoleObotController(ObotController):
         on_marker: MarkerCallback | None = None,
     ) -> None:
         print(f"[speech] {sentence}")
+        events.emit(events.SPEECH, {"text": sentence, "event": "spoken", "engine": "console"})
         self._speech_stopped.clear()
         #* Roughly track real TTS pacing so barge-in timing feels realistic, but poll the
         #* stop flag so an interrupt can cut the "playback" mid-sentence.
@@ -470,9 +523,11 @@ class ConsoleObotController(ObotController):
         length = max(1, len(sentence))
         elapsed = 0.0
         step = 0.05
+        cut_off = False
         while elapsed < estimated_duration:
             if self._speech_stopped.is_set():
                 print("[speech] (cut off)")
+                cut_off = True
                 break
             while pending and (pending[0].char_pos / length) * estimated_duration <= elapsed:
                 marker = pending.pop(0)
@@ -485,6 +540,11 @@ class ConsoleObotController(ObotController):
             for marker in pending:
                 if on_marker is not None:
                     fired.append(asyncio.create_task(on_marker(marker)))
+        events.emit(events.SPEECH, {
+            "text": sentence,
+            "event": "cutoff" if cut_off else "done",
+            "engine": "console",
+        })
         if fired:
             await asyncio.gather(*fired, return_exceptions=True)
 
@@ -493,31 +553,38 @@ class ConsoleObotController(ObotController):
 
     async def nod(self) -> None:
         print("[action][sim] nod")
+        events.emit(events.ACTION, {"name": "nod"})
         await asyncio.sleep(0.3)
 
     async def look_left(self) -> None:
         print("[action][sim] look_left")
+        events.emit(events.ACTION, {"name": "look_left"})
         await asyncio.sleep(0.3)
 
     async def look_right(self) -> None:
         print("[action][sim] look_right")
+        events.emit(events.ACTION, {"name": "look_right"})
         await asyncio.sleep(0.3)
 
     async def blink(self, announce: bool = True) -> None:
         if announce:
             print("[action][sim] blink")
+            events.emit(events.ACTION, {"name": "blink"})
         await asyncio.sleep(0.2)
 
     async def wink(self) -> None:
         print("[action][sim] wink")
+        events.emit(events.ACTION, {"name": "wink"})
         await asyncio.sleep(0.2)
 
     async def shake_head(self) -> None:
         print("[action][sim] shake_head")
+        events.emit(events.ACTION, {"name": "shake_head"})
         await asyncio.sleep(0.4)
 
     async def set_emotion(self, emotion: str) -> None:
         print(f"[emotion][sim] {emotion}")
+        events.emit(events.EMOTION, {"name": emotion})
 
 
 #* Backwards-compatible name for old imports.

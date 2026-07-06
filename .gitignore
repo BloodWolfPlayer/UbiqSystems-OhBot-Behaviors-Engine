@@ -222,3 +222,8 @@ __marimo__/
 # Local config containing API keys and SSH credentials
 config.json
 /ohbotData
+
+# .NET GUI build output (gui/ObotControl)
+gui/**/bin/
+gui/**/obj/
+gui/**/*.user
