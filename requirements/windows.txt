@@ -6,8 +6,17 @@ paramiko>=3.4
 websockets>=12
 
 pyttsx3>=2.90
+# Extra TTS voices (all optional; the engine falls through to what's installed):
+#   gTTS       - Google Translate TTS (online, free, no key).
+#   edge-tts   - Microsoft Edge neural voices (online, free, no key, best quality).
+#   kokoro-onnx- Kokoro offline neural TTS (best local voice; model auto-downloads
+#                to ohbotData/kokoro/ on first use, ~330 MB; bundles espeak-ng).
+#   miniaudio  - decodes the MP3 the online voices (edge/gtts) return into PCM.
 gTTS>=2.5
-# Neural offline TTS (the everyday voice; Gemini TTS is heavily rate-limited).
+edge-tts>=7.0
+miniaudio>=1.59
+kokoro-onnx>=0.4
+# Neural offline TTS (a solid offline voice; heavier neural voices are above).
 # Voice models are downloaded automatically to ohbotData/piper/ on first use.
 piper-tts>=1.4
 # Microphone input: sounddevice provides cross-platform mic capture (no compiler needed).

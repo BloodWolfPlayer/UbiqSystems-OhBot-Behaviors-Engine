@@ -59,12 +59,47 @@ public sealed class LocalTtsConfig
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
+public sealed class EdgeTtsConfig
+{
+    public string Voice { get; set; } = "en-GB-SoniaNeural";
+    public string Rate { get; set; } = "+0%";
+    public string Volume { get; set; } = "+0%";
+    public string Pitch { get; set; } = "+0Hz";
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+public sealed class KokoroTtsConfig
+{
+    public string Voice { get; set; } = "bf_emma";
+    public double Speed { get; set; } = 1.0;
+    public string Lang { get; set; } = "en-us";
+    public string ModelPath { get; set; } = "";
+    public string VoicesPath { get; set; } = "";
+    public bool AutoDownload { get; set; } = true;
+    public bool WarmUp { get; set; } = true;
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+public sealed class GttsConfig
+{
+    public string Lang { get; set; } = "en";
+    public string Tld { get; set; } = "co.uk";
+    public bool Slow { get; set; }
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
 public sealed class TtsConfig
 {
     public string Engine { get; set; } = "auto";
     public GeminiTtsConfig Gemini { get; set; } = new();
     public PiperTtsConfig Piper { get; set; } = new();
     public LocalTtsConfig Local { get; set; } = new();
+    public EdgeTtsConfig Edge { get; set; } = new();
+    public KokoroTtsConfig Kokoro { get; set; } = new();
+    public GttsConfig Gtts { get; set; } = new();
 
     [JsonPropertyName("failure_cooldown_s")]
     public double FailureCooldownS { get; set; } = 90.0;

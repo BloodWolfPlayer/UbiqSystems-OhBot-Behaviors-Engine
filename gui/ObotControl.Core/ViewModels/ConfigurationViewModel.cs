@@ -36,7 +36,7 @@ public partial class ConfigurationViewModel : ObservableObject
         PropertyChanged += OnAnyPropertyChanged;
     }
 
-    public string[] TtsEngines { get; } = { "auto", "gemini", "piper", "local" };
+    public string[] TtsEngines { get; } = { "auto", "edge", "kokoro", "gtts", "gemini", "piper", "local" };
 
     [ObservableProperty] private bool _connected;
     [ObservableProperty] private bool _isDirty;

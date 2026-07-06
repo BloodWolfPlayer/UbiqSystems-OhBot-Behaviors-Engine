@@ -19,6 +19,9 @@ public sealed record VoiceList
     public List<string> Gemini { get; init; } = new();
     public List<string> Piper { get; init; } = new();
     public List<string> Local { get; init; } = new();
+    public List<string> Edge { get; init; } = new();
+    public List<string> Kokoro { get; init; } = new();
+    public List<string> Gtts { get; init; } = new();
 }
 
 public sealed record ModelList

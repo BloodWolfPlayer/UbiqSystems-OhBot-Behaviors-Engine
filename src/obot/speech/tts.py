@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import os
 import re
 import sys
@@ -31,7 +32,15 @@ from pathlib import Path
 
 import numpy as np
 
-from .config import GeminiTTSSettings, LocalTTSSettings, PiperTTSSettings, TTSSettings
+from .config import (
+    EdgeTTSSettings,
+    GeminiTTSSettings,
+    GTTSSettings,
+    KokoroTTSSettings,
+    LocalTTSSettings,
+    PiperTTSSettings,
+    TTSSettings,
+)
 
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -370,6 +379,183 @@ class _PyttsxBackend:
         self._engine.runAndWait()
 
 
+def _decode_mp3(data: bytes, target_rate: int = 24_000) -> tuple[np.ndarray, int]:
+    """Decode MP3 bytes (from the online voices) to mono int16 at ``target_rate``."""
+    try:
+        import miniaudio
+    except ImportError as exc:
+        raise TTSError(
+            "miniaudio is not installed (pip install miniaudio) — needed to decode the "
+            "MP3 audio from the online voices (edge/gtts)."
+        ) from exc
+    try:
+        decoded = miniaudio.decode(
+            data, output_format=miniaudio.SampleFormat.SIGNED16,
+            nchannels=1, sample_rate=target_rate,
+        )
+    except Exception as exc:
+        raise TTSError(f"could not decode MP3 audio: {exc}") from exc
+    samples = np.frombuffer(decoded.samples.tobytes(), dtype=np.int16)
+    if samples.size == 0:
+        raise TTSError("decoded MP3 audio was empty.")
+    return samples, int(decoded.sample_rate)
+
+
+class EdgeTTS(TTSEngine):
+    """Microsoft Edge online neural TTS (edge-tts): Azure-quality voices, free, no key."""
+
+    name = "edge"
+
+    def __init__(self, settings: EdgeTTSSettings) -> None:
+        self._settings = settings
+
+    async def synthesize(self, text: str) -> SynthResult:
+        try:
+            import edge_tts
+        except ImportError as exc:
+            raise TTSError("edge-tts is not installed (pip install edge-tts).") from exc
+
+        s = self._settings
+        try:
+            comm = edge_tts.Communicate(
+                text, voice=s.voice, rate=s.rate, volume=s.volume, pitch=s.pitch
+            )
+            buf = bytearray()
+            async for chunk in comm.stream():
+                if chunk["type"] == "audio":
+                    buf += chunk["data"]
+        except Exception as exc:
+            raise TTSError(f"edge-tts synthesis failed: {exc}") from exc
+        if not buf:
+            raise TTSError("edge-tts returned no audio (check the voice name / network).")
+        samples, rate = _decode_mp3(bytes(buf))
+        return SynthResult(samples=samples, sample_rate=rate, engine=self.name)
+
+
+class GTTSEngine(TTSEngine):
+    """Google Translate TTS (gTTS): free, no key, decent quality. Needs internet."""
+
+    name = "gtts"
+
+    def __init__(self, settings: GTTSSettings) -> None:
+        self._settings = settings
+
+    async def synthesize(self, text: str) -> SynthResult:
+        return await asyncio.to_thread(self._synthesize_blocking, text)
+
+    def _synthesize_blocking(self, text: str) -> SynthResult:
+        try:
+            from gtts import gTTS
+        except ImportError as exc:
+            raise TTSError("gTTS is not installed (pip install gTTS).") from exc
+
+        s = self._settings
+        buf = io.BytesIO()
+        try:
+            gTTS(text=text, lang=s.lang, tld=s.tld, slow=s.slow).write_to_fp(buf)
+        except Exception as exc:
+            raise TTSError(f"gTTS synthesis failed: {exc}") from exc
+        data = buf.getvalue()
+        if not data:
+            raise TTSError("gTTS returned no audio.")
+        samples, rate = _decode_mp3(data)
+        return SynthResult(samples=samples, sample_rate=rate, engine=self.name)
+
+
+class KokoroTTS(TTSEngine):
+    """Kokoro: a small, high-quality open TTS model running fully offline via ONNX.
+
+    Reads more naturally than Piper and runs faster than real time on the CPU. The model
+    (~330 MB) and voice pack download automatically to ``ohbotData/kokoro/`` on first use.
+    Synthesis runs on a worker thread; the ONNX session is loaded once and reused.
+    """
+
+    name = "kokoro"
+
+    MODELS_DIR = Path("ohbotData") / "kokoro"
+    _RELEASE = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
+    _MODEL_FILE = "kokoro-v1.0.onnx"
+    _VOICES_FILE = "voices-v1.0.bin"
+
+
+    def __init__(self, settings: KokoroTTSSettings) -> None:
+        self._settings = settings
+        self._kokoro = None
+        self._lock = threading.Lock()
+        if settings.warm_up:
+            threading.Thread(target=self._warm_up, daemon=True, name="kokoro-warmup").start()
+
+    def _warm_up(self) -> None:
+        try:
+            with self._lock:
+                self._ensure_loaded()
+        except TTSError as exc:
+            print(f"[tts] kokoro warm-up failed: {exc}")
+
+    async def synthesize(self, text: str) -> SynthResult:
+        return await asyncio.to_thread(self._synthesize_blocking, text)
+
+    def _synthesize_blocking(self, text: str) -> SynthResult:
+        with self._lock:
+            kokoro = self._ensure_loaded()
+            try:
+                samples, sample_rate = kokoro.create(
+                    text, voice=self._settings.voice,
+                    speed=float(self._settings.speed), lang=self._settings.lang,
+                )
+            except Exception as exc:
+                raise TTSError(f"kokoro synthesis failed: {exc}") from exc
+        if samples is None or len(samples) == 0:
+            raise TTSError("kokoro produced no audio.")
+        #* Kokoro returns float32 in [-1, 1]; convert to int16 PCM for the pipeline.
+        pcm = np.clip(np.asarray(samples, dtype=np.float32) * 32767.0, -32768, 32767).astype(np.int16)
+        return SynthResult(samples=pcm, sample_rate=int(sample_rate), engine=self.name)
+
+    def _ensure_loaded(self):
+        if self._kokoro is not None:
+            return self._kokoro
+        try:
+            from kokoro_onnx import Kokoro
+        except ImportError as exc:
+            raise TTSError("kokoro-onnx is not installed (pip install kokoro-onnx).") from exc
+
+        model = self._resolve(self._settings.model_path, self._MODEL_FILE, "model", "~330 MB")
+        voices = self._resolve(self._settings.voices_path, self._VOICES_FILE, "voice pack", "~28 MB")
+        print(f"[tts] loading kokoro model {model.name} ...")
+        try:
+            self._kokoro = Kokoro(str(model), str(voices))
+        except Exception as exc:
+            raise TTSError(f"could not load kokoro model: {exc}") from exc
+        return self._kokoro
+
+    def _resolve(self, explicit: str, filename: str, label: str, size: str) -> Path:
+        if explicit:
+            p = Path(explicit)
+            if not p.exists():
+                raise TTSError(f"kokoro {label} path '{explicit}' does not exist.")
+            return p
+        path = self.MODELS_DIR / filename
+        if path.exists():
+            return path
+        if not self._settings.auto_download:
+            raise TTSError(
+                f"kokoro {label} not found at {path}. Download it from {self._RELEASE} "
+                "or set speech.tts.kokoro.auto_download = true."
+            )
+        print(f"[tts] downloading kokoro {label} ({size}, one-time)...")
+        try:
+            import urllib.request
+
+            self.MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(path.suffix + ".part")
+            urllib.request.urlretrieve(f"{self._RELEASE}/{filename}", tmp)
+            os.replace(tmp, path)
+        except Exception as exc:
+            raise TTSError(f"could not download kokoro {label}: {exc}") from exc
+        print(f"[tts] kokoro {label} ready: {path}")
+        return path
+
+
 class FallbackTTS(TTSEngine):
     """Tries engines in order; a failing engine is benched for a cooldown period.
 
@@ -409,40 +595,75 @@ class FallbackTTS(TTSEngine):
             engine.close()
 
 
-def _piper_installed() -> bool:
-    try:
-        import piper  # noqa: F401
+def _module_installed(name: str) -> bool:
+    import importlib.util
 
-        return True
-    except ImportError:
-        return False
+    return importlib.util.find_spec(name) is not None
+
+
+def _piper_installed() -> bool:
+    return _module_installed("piper")
 
 
 def build_tts(settings: TTSSettings, gemini_api_key: str = "") -> TTSEngine:
     """Assemble the engine (chain) described by config.
 
-    ``auto`` chains gemini -> piper -> local, skipping what isn't available.
-    Explicit modes ("gemini", "piper", "local") pin a single engine.
+    ``auto`` chains the best available voices, falling through on failure:
+    edge -> kokoro -> piper -> local. Explicit modes pin a single engine
+    ("edge", "kokoro", "gtts", "gemini", "piper", "local"), with the basic local
+    voice as a last resort only if the pinned engine isn't available.
     """
     mode = settings.engine.lower().strip() or "auto"
     engines: list[TTSEngine] = []
 
-    if mode in ("gemini", "auto") and gemini_api_key:
-        engines.append(GeminiTTS(gemini_api_key, settings.gemini))
-    elif mode == "gemini" and not gemini_api_key:
-        print("[tts] engine set to 'gemini' but gemini_api_key is empty; using local voices.")
+    def missing(what: str) -> None:
+        print(f"[tts] engine set to '{mode}' but {what}; using the basic local voice.")
 
-    if mode in ("piper", "auto"):
+    if mode == "auto":
+        if _module_installed("edge_tts"):
+            engines.append(EdgeTTS(settings.edge))
+        if _module_installed("kokoro_onnx"):
+            engines.append(KokoroTTS(settings.kokoro))
         if _piper_installed():
             engines.append(PiperTTS(settings.piper))
-        elif mode == "piper":
-            print("[tts] engine set to 'piper' but piper-tts is not installed "
-                  "(pip install piper-tts); using the basic local voice.")
+        # local voice appended by the last-resort block below
+    elif mode == "edge":
+        if _module_installed("edge_tts"):
+            engines.append(EdgeTTS(settings.edge))
         else:
-            print("[tts] piper-tts not installed - skipping the neural local voice "
-                  "(pip install piper-tts to enable it).")
+            missing("edge-tts is not installed (pip install edge-tts)")
+    elif mode == "kokoro":
+        if _module_installed("kokoro_onnx"):
+            engines.append(KokoroTTS(settings.kokoro))
+        else:
+            missing("kokoro-onnx is not installed (pip install kokoro-onnx)")
+    elif mode == "gtts":
+        if _module_installed("gtts"):
+            engines.append(GTTSEngine(settings.gtts))
+        else:
+            missing("gTTS is not installed (pip install gTTS)")
+    elif mode == "gemini":
+        if gemini_api_key:
+            engines.append(GeminiTTS(gemini_api_key, settings.gemini))
+        else:
+            missing("gemini_api_key is empty")
+    elif mode == "piper":
+        if _piper_installed():
+            engines.append(PiperTTS(settings.piper))
+        else:
+            missing("piper-tts is not installed (pip install piper-tts)")
+    elif mode == "local":
+        pass  # local voice added unconditionally below
+    else:
+        print(f"[tts] unknown engine '{mode}'; using the auto chain.")
+        if _module_installed("edge_tts"):
+            engines.append(EdgeTTS(settings.edge))
+        if _module_installed("kokoro_onnx"):
+            engines.append(KokoroTTS(settings.kokoro))
+        if _piper_installed():
+            engines.append(PiperTTS(settings.piper))
 
-    if mode in ("local", "auto") or not engines:
+    if not engines or mode in ("auto", "local"):
         engines.append(LocalTTS(settings.local))
 
     if len(engines) == 1:

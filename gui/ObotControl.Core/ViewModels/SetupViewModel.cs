@@ -29,12 +29,15 @@ public partial class SetupViewModel : ObservableObject
     }
 
     public string[] SttEngines { get; } = { "google", "vosk" };
-    public string[] TtsEngines { get; } = { "auto", "gemini", "piper", "local" };
+    public string[] TtsEngines { get; } = { "auto", "edge", "kokoro", "gtts", "gemini", "piper", "local" };
 
     public ObservableCollection<MicDevice> Mics { get; } = new();
     public ObservableCollection<string> GeminiVoices { get; } = new();
     public ObservableCollection<string> PiperVoices { get; } = new();
     public ObservableCollection<string> LocalVoices { get; } = new();
+    public ObservableCollection<string> EdgeVoices { get; } = new();
+    public ObservableCollection<string> KokoroVoices { get; } = new();
+    public ObservableCollection<string> GttsAccents { get; } = new();
 
     [ObservableProperty] private bool _connected;
 
@@ -56,6 +59,9 @@ public partial class SetupViewModel : ObservableObject
     [ObservableProperty] private string? _geminiVoice;
     [ObservableProperty] private string? _piperVoice;
     [ObservableProperty] private string? _localVoice;
+    [ObservableProperty] private string? _edgeVoice;
+    [ObservableProperty] private string? _kokoroVoice;
+    [ObservableProperty] private string? _gttsAccent;
     [ObservableProperty] private string _testText = "Hello, I am Ms. Mimic. This is a voice test.";
 
     [ObservableProperty] private double _micLevel;
@@ -85,6 +91,9 @@ public partial class SetupViewModel : ObservableObject
         GeminiVoice = cfg.Speech.Tts.Gemini.Voice;
         PiperVoice = cfg.Speech.Tts.Piper.Voice;
         LocalVoice = cfg.Speech.Tts.Local.Voice;
+        EdgeVoice = cfg.Speech.Tts.Edge.Voice;
+        KokoroVoice = cfg.Speech.Tts.Kokoro.Voice;
+        GttsAccent = cfg.Speech.Tts.Gtts.Tld;
         SelectSavedMic(cfg.Audio.InputDeviceIndex);
         }
         finally { _loading = prev; }
@@ -115,6 +124,9 @@ public partial class SetupViewModel : ObservableObject
         if (GeminiVoice is not null) cfg.Speech.Tts.Gemini.Voice = GeminiVoice;
         if (PiperVoice is not null) cfg.Speech.Tts.Piper.Voice = PiperVoice;
         if (LocalVoice is not null) cfg.Speech.Tts.Local.Voice = LocalVoice;
+        if (EdgeVoice is not null) cfg.Speech.Tts.Edge.Voice = EdgeVoice;
+        if (KokoroVoice is not null) cfg.Speech.Tts.Kokoro.Voice = KokoroVoice;
+        if (GttsAccent is not null) cfg.Speech.Tts.Gtts.Tld = GttsAccent;
     }
 
     private void SelectSavedMic(int? index)
@@ -140,6 +152,9 @@ public partial class SetupViewModel : ObservableObject
             Fill(GeminiVoices, voices.Gemini);
             Fill(PiperVoices, voices.Piper);
             Fill(LocalVoices, voices.Local);
+            Fill(EdgeVoices, voices.Edge);
+            Fill(KokoroVoices, voices.Kokoro);
+            Fill(GttsAccents, voices.Gtts);
             LoadFrom(_store.Current); // re-select saved voices now the lists exist
             Status = $"{mics.Count} mic(s), voices loaded";
         }
@@ -176,6 +191,9 @@ public partial class SetupViewModel : ObservableObject
         {
             "gemini" => GeminiVoice,
             "piper" => PiperVoice,
+            "edge" => EdgeVoice,
+            "kokoro" => KokoroVoice,
+            "gtts" => GttsAccent,
             _ => LocalVoice,
         } ?? "";
         try

@@ -111,12 +111,15 @@ Pick one at startup:
 
 `ohbot.say()` is no longer used. Speech is handled by `obot.speech.SpeechEngine`:
 
-- **Voices** — three tiers, best first:
-  1. **Gemini TTS** (`"gemini"`): the most natural voices (`Kore`, `Puck`, `Leda`, ...), needs `gemini_api_key`. **Free tier is ~3 requests/minute**, so it can't carry a whole conversation on its own.
-  2. **Piper** (`"piper"`): neural TTS running **fully offline** on the PC and the Pi — close-to-Gemini quality, no rate limits, ~0.1× real-time synthesis after warm-up. Default voice `en_GB-cori-high` (British female, fits Ms. Mimic); the model (~110 MB) downloads automatically to `ohbotData/piper/` on first use. On a Raspberry Pi prefer a `-medium` voice (e.g. `en_GB-alba-medium`). Pace via `length_scale` (0.9 = faster).
-  3. **Basic local** (`"local"`): SAPI/espeak — robotic but dependency-free, the last resort.
+- **Voices** — pick one with `speech.tts.engine`, or `"auto"` to chain the best available:
+  - **Edge** (`"edge"`) — Microsoft Edge **neural** voices via `edge-tts`. Online, **free, no API key**, and the most natural of the free options (Azure-quality: `en-GB-SoniaNeural`, `en-US-AriaNeural`, ...). Unofficial endpoint, needs internet.
+  - **Kokoro** (`"kokoro"`) — a small open **neural** model running **fully offline** via ONNX. The best *local* voice — clearly more natural than Piper — and faster than real time on CPU. Model (~330 MB) + voices auto-download to `ohbotData/kokoro/` on first use; bundles espeak-ng (no system install). British voices `bf_emma`/`bf_alice`, tune pace with `speed`.
+  - **gTTS** (`"gtts"`) — Google Translate TTS. Online, free, no key, decent; the "voice" is the accent `tld` (`co.uk`, `com`, `com.au`, ...).
+  - **Gemini** (`"gemini"`) — very natural, needs `gemini_api_key`, but **free tier ≈ 3 requests/minute**.
+  - **Piper** (`"piper"`) — offline neural TTS; a solid fallback. Voice `en_GB-cori-high`, model auto-downloads to `ohbotData/piper/`. Pace via `length_scale`.
+  - **Basic local** (`"local"`) — SAPI/espeak, robotic but dependency-free, the last resort.
 
-  `"auto"` (default) chains all three: Gemini while quota lasts → Piper for the bulk of the conversation → SAPI if everything else breaks. A failing engine is benched for `failure_cooldown_s` so it doesn't add a timeout to every sentence.
+  The online voices (edge/gtts) return MP3, decoded to PCM via `miniaudio`. `"auto"` chains **edge → kokoro → piper → local**, so you get near-Azure quality online, a strong offline voice otherwise, and it never fully fails. A failing engine is benched for `failure_cooldown_s` so it doesn't add a timeout to every sentence.
 - **Fast output.** While a sentence is playing, the next one is already being synthesized (prefetch), so the Gemini round-trip is hidden behind playback.
 - **Interruption at word boundaries.** Barge-in/SPACE no longer kills the audio mid-phoneme: playback finishes the word being voiced (plus a tiny fade) and goes quiet. The remaining sentences are dropped and the LLM is told what was and wasn't said, as before.
 - **Lip sync.** The mouth is animated from the actual audio: an RMS envelope is gated, curved and smoothed into lip positions. Every parameter (`gate`, `gamma`, `attack`, `release`, gains, fps, sync offset) is tunable in `config.json → speech.mouth` — or live with sliders in the simulator.
@@ -314,7 +317,10 @@ mid-speech, and stops. Exit code 0 = all checks passed.
 | `audio.vosk_model_path` | Path to an unzipped Vosk model directory. Required only for offline STT. Only needed if using custom models.|
 | `recent_gemini_models` | MRU list of Gemini models (last 3). Maintained automatically. |
 | `recent_ollama_models` | Same idea for Ollama. Maintained automatically. |
-| `speech.tts.engine` | `"gemini"`, `"piper"`, `"local"`, or `"auto"` (gemini → piper → local fallback chain). |
+| `speech.tts.engine` | `"auto"` (edge → kokoro → piper → local), or pin one: `"edge"`, `"kokoro"`, `"gtts"`, `"gemini"`, `"piper"`, `"local"`. |
+| `speech.tts.edge.*` | Edge neural voice: `voice` (e.g. `en-GB-SoniaNeural`), `rate`/`volume`/`pitch` prosody strings (`"+0%"`, `"+0Hz"`). |
+| `speech.tts.kokoro.*` | Offline neural voice: `voice` (e.g. `bf_emma`), `speed`, `lang`; model auto-downloads (or set `model_path`/`voices_path`); `warm_up` preloads at startup. |
+| `speech.tts.gtts.*` | Google Translate TTS: `lang` (`en`), `tld` accent (`co.uk`), `slow`. |
 | `speech.tts.gemini.*` | TTS model, prebuilt voice name (`Kore`, `Puck`, `Leda`, ...), optional `style` instruction ("Say this like a British news presenter:"). |
 | `speech.tts.piper.*` | Offline neural voice: `voice` name (auto-downloaded), or explicit `model_path`; `length_scale` = pace; `warm_up` preloads the model at startup. |
 | `speech.tts.local.*` | Basic voice substring (`zira`), speaking rate (wpm), volume. |

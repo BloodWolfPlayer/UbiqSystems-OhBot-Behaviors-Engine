@@ -12,11 +12,22 @@ import sys
 from pathlib import Path
 
 from ..speech.config import (
+    EdgeTTSSettings,
     GeminiTTSSettings,
+    GTTSSettings,
+    KokoroTTSSettings,
     LocalTTSSettings,
     PiperTTSSettings,
 )
-from ..speech.tts import GeminiTTS, LocalTTS, PiperTTS, TTSError
+from ..speech.tts import (
+    EdgeTTS,
+    GeminiTTS,
+    GTTSEngine,
+    KokoroTTS,
+    LocalTTS,
+    PiperTTS,
+    TTSError,
+)
 
 #* Gemini's prebuilt voice names are a fixed catalogue (not fetched per key), so a
 #* static list is correct and keeps the Setup page working offline.
@@ -27,6 +38,28 @@ GEMINI_PREBUILT_VOICES = [
     "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi",
     "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat",
 ]
+
+#* A curated set of Microsoft Edge neural voices (British first, for Ms. Mimic). The full
+#* edge-tts catalogue is ~300 voices across all languages; these are the useful English ones.
+EDGE_VOICES = [
+    "en-GB-SoniaNeural", "en-GB-LibbyNeural", "en-GB-MaisieNeural",
+    "en-GB-RyanNeural", "en-GB-ThomasNeural",
+    "en-US-AriaNeural", "en-US-JennyNeural", "en-US-MichelleNeural",
+    "en-US-GuyNeural", "en-US-AnaNeural",
+    "en-AU-NatashaNeural", "en-AU-WilliamNeural",
+    "en-IE-EmilyNeural", "en-CA-ClaraNeural",
+]
+
+#* Kokoro v1.0 voice ids (British female first). b* = British, a* = American; f/m = female/male.
+KOKORO_VOICES = [
+    "bf_emma", "bf_isabella", "bf_alice", "bf_lily",
+    "bm_george", "bm_lewis", "bm_daniel", "bm_fable",
+    "af_heart", "af_bella", "af_nicole", "af_sarah", "af_sky",
+    "am_adam", "am_michael", "am_liam", "am_onyx",
+]
+
+#* gTTS has no named voices — the "voice" is the Google endpoint TLD, which sets the accent.
+GTTS_ACCENTS = ["co.uk", "com", "com.au", "ca", "co.in", "ie", "co.za"]
 
 
 def _piper_cached_voices(configured: str) -> list[str]:
@@ -83,15 +116,17 @@ def _pyttsx_voices() -> list[str]:
 def list_tts_voices(cfg) -> dict:
     """Return the available voices per engine for the Setup page.
 
-    ``{"gemini": [...], "piper": [...], "local": [...]}``. Piper lists what is
-    downloaded locally (usable offline); ``local`` is SAPI on Windows / espeak
-    elsewhere.
+    One list per engine. Piper lists what is downloaded locally; ``edge``/``kokoro``
+    are curated catalogues; ``gtts`` lists accent TLDs; ``local`` is SAPI / espeak.
     """
     local = _sapi_voices() if sys.platform == "win32" else _pyttsx_voices()
     return {
         "gemini": list(GEMINI_PREBUILT_VOICES),
         "piper": _piper_cached_voices(cfg.speech.tts.piper.voice),
         "local": local,
+        "edge": list(EDGE_VOICES),
+        "kokoro": list(KOKORO_VOICES),
+        "gtts": list(GTTS_ACCENTS),
     }
 
 
@@ -125,6 +160,23 @@ def speak_test_blocking(cfg, engine: str, voice: str, text: str) -> str:
              "warm_up": False}
         )
         tts = PiperTTS(settings)
+    elif engine == "edge":
+        settings = EdgeTTSSettings.from_dict(
+            {**cfg.speech.tts.edge.__dict__, "voice": voice or cfg.speech.tts.edge.voice}
+        )
+        tts = EdgeTTS(settings)
+    elif engine == "kokoro":
+        settings = KokoroTTSSettings.from_dict(
+            {**cfg.speech.tts.kokoro.__dict__, "voice": voice or cfg.speech.tts.kokoro.voice,
+             "warm_up": False}
+        )
+        tts = KokoroTTS(settings)
+    elif engine == "gtts":
+        #* gTTS "voice" from the GUI is the accent TLD.
+        settings = GTTSSettings.from_dict(
+            {**cfg.speech.tts.gtts.__dict__, "tld": voice or cfg.speech.tts.gtts.tld}
+        )
+        tts = GTTSEngine(settings)
     else:  # "local" / anything else
         settings = LocalTTSSettings.from_dict(
             {**cfg.speech.tts.local.__dict__, "voice": voice or cfg.speech.tts.local.voice}

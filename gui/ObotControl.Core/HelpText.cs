@@ -61,7 +61,9 @@ public static class HelpText
     public const string SttEngine = "Speech-to-text: 'google' (online, accurate) or 'vosk' (offline, needs a model folder).";
     public const string VoskModel = "Folder of an unzipped Vosk model (contains am/, conf/, graph/). Only needed for offline STT.";
     public const string TtsEngine =
-        "Which voice to speak with. 'auto' chains gemini → piper → local, falling through on failure.";
+        "Which voice to speak with. 'auto' chains the best available (edge → kokoro → piper → " +
+        "local), falling through on failure. Or pin one: edge (online, best), kokoro (offline, " +
+        "best local), gtts/gemini (online), piper (offline), local (robotic last resort).";
     public const string TestVoice = "Speak the test sentence with this engine/voice on the engine host so you can hear it.";
     public const string Save = "Write these settings to config.json on the engine (the same file the terminal app reads).";
     public const string Reload = "Discard edits and reload the settings currently saved on the engine.";

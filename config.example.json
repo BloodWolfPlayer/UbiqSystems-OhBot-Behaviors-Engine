@@ -37,6 +37,26 @@
         "rate_wpm": 175,
         "volume": 1.0
       },
+      "edge": {
+        "voice": "en-GB-SoniaNeural",
+        "rate": "+0%",
+        "volume": "+0%",
+        "pitch": "+0Hz"
+      },
+      "kokoro": {
+        "voice": "bf_emma",
+        "speed": 1.0,
+        "lang": "en-us",
+        "model_path": "",
+        "voices_path": "",
+        "auto_download": true,
+        "warm_up": true
+      },
+      "gtts": {
+        "lang": "en",
+        "tld": "co.uk",
+        "slow": false
+      },
       "failure_cooldown_s": 90.0
     },
     "mouth": {

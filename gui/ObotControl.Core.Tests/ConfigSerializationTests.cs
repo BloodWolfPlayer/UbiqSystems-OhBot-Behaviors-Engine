@@ -39,6 +39,9 @@ public class ConfigSerializationTests
         Assert.True(cfg.Speech.Tts.Gemini.Extra is null or { Count: 0 });
         Assert.True(cfg.Speech.Tts.Piper.Extra is null or { Count: 0 });
         Assert.True(cfg.Speech.Tts.Local.Extra is null or { Count: 0 });
+        Assert.True(cfg.Speech.Tts.Edge.Extra is null or { Count: 0 });
+        Assert.True(cfg.Speech.Tts.Kokoro.Extra is null or { Count: 0 });
+        Assert.True(cfg.Speech.Tts.Gtts.Extra is null or { Count: 0 });
         Assert.True(cfg.Speech.Mouth.Extra is null or { Count: 0 });
         Assert.True(cfg.Motion.Extra is null or { Count: 0 });
         Assert.True(cfg.Behaviors.Extra is null or { Count: 0 });
