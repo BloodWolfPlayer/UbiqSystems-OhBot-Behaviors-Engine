@@ -22,6 +22,7 @@ import websockets
 
 from ..config import Config, config_path
 from ..core import events
+from ..robot import joints
 from .session import ServerSession
 
 #* Topics forwarded verbatim from the engine's event bus to every connected client.
@@ -145,6 +146,9 @@ class ControlServer:
             "interrupt": self._m_interrupt,
             "set_mic_mode": self._m_set_mic_mode,
             "trigger_ptt": self._m_trigger_ptt,
+            "set_joint": self._m_set_joint,
+            "release_joint": self._m_release_joint,
+            "release_all_joints": self._m_release_all_joints,
             "get_state": self._m_get_state,
             "ping": self._m_ping,
         }
@@ -241,6 +245,24 @@ class ControlServer:
 
     async def _m_trigger_ptt(self, params: dict) -> dict:
         self._require_session().trigger_ptt()
+        return {}
+
+    async def _m_set_joint(self, params: dict) -> dict:
+        if "joint" not in params or "position" not in params:
+            raise ValueError("set_joint needs 'joint' and 'position'.")
+        joint_id = joints.resolve(params["joint"])
+        position = max(0.0, min(10.0, float(params["position"])))
+        self._require_session().set_joint(joint_id, position)
+        return {}
+
+    async def _m_release_joint(self, params: dict) -> dict:
+        if "joint" not in params:
+            raise ValueError("release_joint needs a 'joint'.")
+        self._require_session().release_joint(joints.resolve(params["joint"]))
+        return {}
+
+    async def _m_release_all_joints(self, params: dict) -> dict:
+        self._require_session().release_all_joints()
         return {}
 
     async def _m_get_state(self, params: dict) -> dict:

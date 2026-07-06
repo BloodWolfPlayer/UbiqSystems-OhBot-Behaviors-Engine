@@ -105,6 +105,17 @@ class ObotController(ABC):
         del joint_id, delta, duration_s
         return False
 
+    def set_manual_joint(self, joint_id: int, position: float | None) -> bool:
+        """Hold (or release, when ``position`` is None) one joint at an absolute
+        position for manual GUI control, overriding ambient behaviors/speech for
+        that joint until released. Returns False when there are no servos.
+        """
+        del joint_id, position
+        return False
+
+    def release_all_manual_joints(self) -> None:
+        """Release every joint held by :meth:`set_manual_joint`. No-op with no motors."""
+
     async def stop_speaking(self) -> None:
         """Stop current speech at the next word boundary. Override to actually halt TTS."""
 
@@ -142,6 +153,10 @@ class AnimatedObotController(ObotController):
         #* (top_delta, bottom_delta) written by the speech engine's mouth sink;
         #* read by the mixer thread. Replaced atomically as a tuple.
         self._lips: tuple[float, float] = (0.0, 0.0)
+        #* joint_id -> absolute position (0..10), set by the GUI's manual control
+        #* panel. Wins over offsets/lips for that joint until explicitly released.
+        self._manual_overrides: dict[int, float] = {}
+        self._manual_lock = threading.Lock()
         self._speech_stopped = threading.Event()
         self._stop_event = threading.Event()
 
@@ -161,6 +176,18 @@ class AnimatedObotController(ObotController):
                 MotionOffset(joint_id=joint_id, delta=delta, duration_s=duration_s)
             )
         return True
+
+    def set_manual_joint(self, joint_id: int, position: float | None) -> bool:
+        with self._manual_lock:
+            if position is None:
+                self._manual_overrides.pop(joint_id, None)
+            else:
+                self._manual_overrides[joint_id] = min(10.0, max(0.0, position))
+        return True
+
+    def release_all_manual_joints(self) -> None:
+        with self._manual_lock:
+            self._manual_overrides.clear()
 
     def _mixer_loop(self) -> None:
         """Blend offsets + speech lips into joint targets and chase them at a bounded rate."""
@@ -201,8 +228,15 @@ class AnimatedObotController(ObotController):
             targets[joints.TOPLIP] += lip_top
             targets[joints.BOTTOMLIP] += lip_bottom
 
+            #* Manual GUI overrides win outright: a held joint ignores behaviors,
+            #* offsets and speech lips until the GUI releases it.
+            with self._manual_lock:
+                if self._manual_overrides:
+                    targets.update(self._manual_overrides)
+
             for j in joints.ALL_JOINTS:
-                target = min(10.0, max(0.0, targets[j]))
+                #* Limiter later !!!
+                target = targets[j]
                 #* Slew-rate limiting: travel toward the target at a bounded
                 #* positions-per-second speed so motion is smooth, not snappy.
                 #* Lips and lids use a much higher rate — visemes and blinks
@@ -352,7 +386,7 @@ class AnimatedObotController(ObotController):
             #* Only script/marker-driven blinks are announced; ambient auto_blink
             #* passes announce=False so it stays off both the console and the event feed.
             events.emit(events.ACTION, {"name": "blink"})
-        self.enqueue_offset(joints.LIDBLINK, -10.0, 0.5)
+        self.enqueue_offset(joints.LIDBLINK, -15.0, 0.5)
         await asyncio.sleep(0.5)
 
     async def wink(self) -> None:

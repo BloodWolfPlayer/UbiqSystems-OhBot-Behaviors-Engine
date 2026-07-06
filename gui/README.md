@@ -22,6 +22,11 @@ natively on **Windows, Linux and the Raspberry Pi**.
   STT engine, and TTS voices with per-engine **Test** buttons. Save/Reload.
 - **Configuration** — TTS engine + per-engine voice settings, **mouth-tuning sliders that
   apply live while the robot talks**, servo motion limits, ambient behaviors. Save/Revert/Reload.
+- **Manual control** — jog each of the seven motors with a slider and watch its live
+  position, for testing/calibrating servos outside a conversation. **Enable** freezes every
+  joint at its current pose (no jump); dragging a slider then overrides that motor in the
+  engine's mixer while ambient behaviors keep running on the rest. **Release** hands
+  everything back to automatic control. Needs a running session (any backend/controller).
 - **Logs** — engine stdout + structured log/error events, with level filters.
 
 The **face preview is docked on the right and visible on every page** — it mirrors the

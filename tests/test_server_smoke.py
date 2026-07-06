@@ -137,6 +137,16 @@ async def run_checks(port: int, controller: str) -> None:
             await client.wait_topic("joints", timeout=10.0)
             print(f"  [ok] joints events streaming ({len(client.by_topic['joints'])} so far)")
 
+            #* Manual control: hold HeadNod fully forward, confirm the joints stream
+            #* reflects the held position, then release it back to ambient control.
+            await client.call("set_joint", joint="HeadNod", position=10.0)
+            held = await _wait_joint_value(client, "HeadNod", 10.0, tolerance=0.2, timeout=5.0)
+            assert held, "HeadNod did not reach the manually-held position"
+            print("  [ok] set_joint holds an absolute position")
+            await client.call("release_joint", joint="HeadNod")
+            await client.call("release_all_joints")
+            print("  [ok] release_joint / release_all_joints accepted")
+
         await client.call("send_text", text="Hello there [Nod] (Happy) I am Ms Mimic. "
                                             "This is a fairly long test sentence so there is "
                                             "time to interrupt. And one more sentence here.")
@@ -160,6 +170,20 @@ async def run_checks(port: int, controller: str) -> None:
         print("  [ok] session_stop")
     finally:
         await client.close()
+
+
+async def _wait_joint_value(client: Client, joint: str, target: float,
+                            tolerance: float, timeout: float) -> bool:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        frames = client.by_topic.get("joints", [])
+        if frames and abs(frames[-1].get(joint, -999) - target) <= tolerance:
+            return True
+        remaining = deadline - loop.time()
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(client.events.get(), timeout=max(0.1, remaining))
+    return False
 
 
 async def _wait_state(client: Client, target: str, timeout: float) -> bool:

@@ -68,6 +68,17 @@ public static class HelpText
     public const string Save = "Write these settings to config.json on the engine (the same file the terminal app reads).";
     public const string Reload = "Discard edits and reload the settings currently saved on the engine.";
 
+    // -- manual control ------------------------------------------------------------------
+    public const string EnableManualControl =
+        "Freeze every motor at its current pose and hand the sliders control. Ambient " +
+        "behaviors/speech no longer move a joint once you drag its slider. Needs a running session.";
+    public const string ReleaseManualControl =
+        "Hand every motor back to automatic control (ambient behaviors, lip-sync, actions).";
+    public const string CenterAllJoints = "Send every slider back to 5 (rest/neutral) while manual control is active.";
+    public const string ManualControlPanel =
+        "One row per motor: 'now' is the live position reported by the engine, the slider is " +
+        "the position you're commanding, and Center resets that one motor to rest.";
+
     // -- configuration -----------------------------------------------------------------
     public const string MouthTuning =
         "Lip-sync tuning. These apply LIVE while the robot talks (saved after ~¼ s) so you can dial it in by ear.";
@@ -87,6 +98,10 @@ public static class HelpText
     public const string PageConfiguration =
         "Fine-tuning: TTS engine + per-engine voice settings, mouth-tuning sliders that apply live while " +
         "talking, servo motion limits, and the ambient behavior modules. Save/Revert with a dirty indicator.";
+    public const string PageManualControl =
+        "Jog each motor directly and watch its live position — for testing/calibrating servos outside " +
+        "a conversation. Enable to freeze every joint where it is, drag sliders to move one, Release to " +
+        "hand control back to ambient behaviors and speech. Needs a running session.";
     public const string PageLogs =
         "Everything the engine prints plus structured log/error events, with Info/Warning/Error filters.";
     public const string Intro =

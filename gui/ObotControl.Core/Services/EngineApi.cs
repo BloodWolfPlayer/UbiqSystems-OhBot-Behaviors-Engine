@@ -62,6 +62,16 @@ public sealed class EngineApi
 
     public Task TriggerPttAsync() => _client.CallAsync("trigger_ptt");
 
+    /// <summary>Hold one joint (by name, e.g. "HeadNod") at an absolute position (0..10).</summary>
+    public Task SetJointAsync(string joint, double position) =>
+        _client.CallAsync("set_joint", new { joint, position });
+
+    /// <summary>Release a single manually-held joint back to ambient/automatic control.</summary>
+    public Task ReleaseJointAsync(string joint) => _client.CallAsync("release_joint", new { joint });
+
+    /// <summary>Release every manually-held joint at once.</summary>
+    public Task ReleaseAllJointsAsync() => _client.CallAsync("release_all_joints");
+
     public async Task<SessionState> GetStateAsync() =>
         (await _client.CallAsync<SessionState>("get_state").ConfigureAwait(false))!;
 }

@@ -30,4 +30,19 @@ JOINT_NAMES = {
     EYETILT: "EyeTilt",
 }
 
+NAME_TO_JOINT = {name: joint_id for joint_id, name in JOINT_NAMES.items()}
+
 REST_POSITION = 5.0
+
+
+def resolve(joint: int | str) -> int:
+    """Resolve a joint id or name (as sent over the wire by the GUI) to a canonical id."""
+    if isinstance(joint, str):
+        try:
+            return NAME_TO_JOINT[joint]
+        except KeyError:
+            raise ValueError(f"unknown joint '{joint}'") from None
+    joint_id = int(joint)
+    if joint_id not in ALL_JOINTS:
+        raise ValueError(f"unknown joint id {joint_id}")
+    return joint_id

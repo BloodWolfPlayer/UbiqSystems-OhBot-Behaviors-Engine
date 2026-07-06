@@ -23,6 +23,7 @@ public partial class ShellViewModel : ObservableObject
     public DashboardViewModel Dashboard { get; }
     public SetupViewModel Setup { get; }
     public ConfigurationViewModel Configuration { get; }
+    public ManualControlViewModel ManualControl { get; }
 
     public string[] LaunchControllers { get; } = { "virtual", "sim", "console" };
 
@@ -50,9 +51,17 @@ public partial class ShellViewModel : ObservableObject
         Dashboard = new DashboardViewModel(Api, Logs);
         Setup = new SetupViewModel(Api, Store, Logs);
         Configuration = new ConfigurationViewModel(Api, Store, Logs);
+        ManualControl = new ManualControlViewModel(Api, Logs);
 
         Client.StateChanged += (_, s) => HandleConnectionState(s);
         Client.EngineEventReceived += (_, e) => RouteEvent(e);
+        Dashboard.PropertyChanged += (_, e) =>
+        {
+            //* The dashboard owns session_start/session_stop; mirror its result so the
+            //* manual-control panel knows whether set_joint/release_joint will succeed.
+            if (e.PropertyName == nameof(DashboardViewModel.SessionActive))
+                ManualControl.NotifySessionActive(Dashboard.SessionActive);
+        };
 
         RepoRoot = EngineProcess.LocateRepoRoot();
     }
@@ -156,6 +165,7 @@ public partial class ShellViewModel : ObservableObject
         Dashboard.OnConnectionChanged(IsConnected);
         Setup.OnConnectionChanged(IsConnected);
         Configuration.OnConnectionChanged(IsConnected);
+        ManualControl.OnConnectionChanged(IsConnected);
 
         if (IsConnected)
         {
@@ -193,6 +203,10 @@ public partial class ShellViewModel : ObservableObject
                 break;
             case Topics.MicLevel:
                 Setup.HandleEvent(evt);
+                break;
+            case Topics.Joints:
+                Dashboard.HandleEvent(evt);
+                ManualControl.HandleEvent(evt);
                 break;
             default:
                 Dashboard.HandleEvent(evt);

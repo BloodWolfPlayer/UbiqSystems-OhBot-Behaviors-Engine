@@ -349,6 +349,21 @@ class ServerSession:
         if self._audio is not None:
             self._audio.trigger_ptt()
 
+    def set_joint(self, joint_id: int, position: float) -> None:
+        """Hold one joint at an absolute position (GUI manual control panel)."""
+        if self._controller is not None:
+            self._controller.set_manual_joint(joint_id, position)
+
+    def release_joint(self, joint_id: int) -> None:
+        """Release a manually-held joint back to ambient/automatic control."""
+        if self._controller is not None:
+            self._controller.set_manual_joint(joint_id, None)
+
+    def release_all_joints(self) -> None:
+        """Release every manually-held joint at once."""
+        if self._controller is not None:
+            self._controller.release_all_manual_joints()
+
     # -- turn worker -------------------------------------------------------------------
 
     async def _mic_consumer_loop(self) -> None:

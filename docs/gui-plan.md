@@ -93,6 +93,7 @@ Events (server-push): `{ "type":"event", "topic":"state|transcript|speech|joints
 | `send_text` | `{text}` — one conversation turn (works alongside the mic) |
 | `interrupt` | — (same path as SPACE/barge-in: word-boundary stop) |
 | `set_mic_mode` | `{mode:"vad"\|"ptt"\|"muted"}` |
+| `set_joint` / `release_joint` / `release_all_joints` | `{joint:"HeadNod"\|...\|id, position:0..10}` → hold/release one joint's absolute position for manual GUI control (a motor test panel); a held joint overrides ambient behaviors/speech until released. Needs an active session. |
 | `get_state` | → `{session, backend, model, state, tts_engine_active}` |
 
 Auth: none, bind 127.0.0.1 only. (LAN/Pi support later: `--host 0.0.0.0` + token param — out of scope now.)
@@ -178,7 +179,7 @@ team), `winget`-style install script, LAN mode for the Pi-hosted engine (token a
 | 1 | ✅ Solution + EngineClient + shell + launch/attach | **DONE**. `gui/ObotControl.slnx`: `ObotControl.Core` (EngineClient reconnect loop, `EngineApi`, DTOs, `EngineProcess` launcher, all MVVM VMs) + `ObotControl.Core.Tests` (12 xunit tests incl. a **live** end-to-end run against the real engine). |
 | 2 | ✅ Setup + Configuration pages | **DONE** in both front-ends: keys/COM/SSH, mic list + live level test, STT, TTS voices + test buttons; mouth-tuning sliders with **live debounced apply**, motion, behaviors, dirty/save/revert. |
 | 3 | ✅ Dashboard | **DONE**: backend/model/controller quick-switch, start/stop, typed + mic turns, big Interrupt, mic mode, state indicator, active-TTS badge, and a live **face preview** (joint stream). |
-| 4 | Polish | log filters, `virtual` headless controller, help overlay + hover tooltips on every control, a persistent face preview visible on all pages, and a mechanically-faithful face (two separate silver lip plates, amber eyes + blue acrylic head). Profiles / packaging / LAN-token still open. |
+| 4 | Polish | log filters, `virtual` headless controller, help overlay + hover tooltips on every control, a persistent face preview visible on all pages, a mechanically-faithful face (two separate silver lip plates, amber eyes + blue acrylic head), and a **Manual control** page (per-motor sliders + live position readouts, `set_joint`/`release_joint`) for jogging/testing the servos directly. Profiles / packaging / LAN-token still open. |
 
 **One cross-platform GUI over the shared Core.** Consolidated to a single **Avalonia**
 app (`ObotControl.App`) that runs natively on Windows, Linux and the Pi (the earlier WinUI 3

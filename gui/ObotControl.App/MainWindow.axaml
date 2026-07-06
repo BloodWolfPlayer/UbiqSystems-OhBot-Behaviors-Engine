@@ -63,6 +63,9 @@
         <TabItem Header="Configuration">
           <views:ConfigurationView DataContext="{Binding Configuration}"/>
         </TabItem>
+        <TabItem Header="Manual control">
+          <views:ManualControlView DataContext="{Binding ManualControl}"/>
+        </TabItem>
         <TabItem Header="Logs">
           <views:LogsView DataContext="{Binding Logs}"/>
         </TabItem>
@@ -92,6 +95,10 @@
               <StackPanel Spacing="2">
                 <TextBlock Text="Configuration" FontWeight="Bold" Foreground="#6EA8E0"/>
                 <TextBlock Text="{x:Static core:HelpText.PageConfiguration}" TextWrapping="Wrap"/>
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Manual control" FontWeight="Bold" Foreground="#6EA8E0"/>
+                <TextBlock Text="{x:Static core:HelpText.PageManualControl}" TextWrapping="Wrap"/>
               </StackPanel>
               <StackPanel Spacing="2">
                 <TextBlock Text="Logs" FontWeight="Bold" Foreground="#6EA8E0"/>
