@@ -58,7 +58,7 @@ CONFUSED: EmotionPose = {
 
 ANGRY: EmotionPose = {
     joints.TOPLIP: -2.0,    #!AngryDefault -- tight, downturned mouth
-    joints.BOTTOMLIP: -2.0,  #!AngryDefault
+    joints.BOTTOMLIP: 1.0,  #!AngryDefault
     joints.EYETILT: -1.0,   #!AngryDefault -- lowered, browed gaze
     joints.HEADNOD: -1.0,   #!AngryDefault -- head lowered, confrontational
 }
@@ -79,6 +79,7 @@ SHOUTING: EmotionPose = {
     joints.TOPLIP: 4.0,      #!ShoutingDefault -- mouth wide open
     joints.BOTTOMLIP: 4.0,   #!ShoutingDefault
     joints.HEADNOD: 1.0,     #!ShoutingDefault -- head thrown back, assertive
+    joints.LIDBLINK: 2.0,    #!ShoutingDefault -- eyes wide open, alert
 }
 
 #* Name -> pose, in the same order as the "Available Emotions" list in
