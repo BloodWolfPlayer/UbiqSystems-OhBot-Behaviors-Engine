@@ -123,6 +123,12 @@ stops. Must run green on a machine with no robot.
   (working dir = repo root — the engine requires it), capture stdout into the log pane,
   kill on app exit (Job Object or `Process.Kill(entireProcessTree:true)`). Also support
   "Attach" to an already-running server (host/port field).
+  > **UPDATE (as built, Milestone 4):** `<repo>\OhBots` is no longer assumed to exist.
+  > `PythonEnvironmentService` (Windows only) discovers it — or any other venv, or a
+  > system Python 3.12 — and only falls back to silently installing a private Python
+  > (python.org installer into `%LOCALAPPDATA%\ObotControl`, no admin/terminal) if
+  > nothing usable is found; `PythonSetupViewModel` surfaces this as "0. Python
+  > environment" atop the Setup page and gates "Launch engine" on it.
 - Navigation shell (NavigationView): Dashboard, Setup, Configuration, Logs.
 
 ## 5. Phase 2 — Setup & Configuration pages
@@ -181,7 +187,7 @@ team), `winget`-style install script, LAN mode for the Pi-hosted engine (token a
 | 1 | ✅ Solution + EngineClient + shell + launch/attach | **DONE**. `gui/ObotControl.slnx`: `ObotControl.Core` (EngineClient reconnect loop, `EngineApi`, DTOs, `EngineProcess` launcher, all MVVM VMs) + `ObotControl.Core.Tests` (12 xunit tests incl. a **live** end-to-end run against the real engine). |
 | 2 | ✅ Setup + Configuration pages | **DONE** in both front-ends: keys/COM/SSH, mic list + live level test, STT, TTS voices + test buttons; mouth-tuning sliders with **live debounced apply**, motion, behaviors, dirty/save/revert. |
 | 3 | ✅ Dashboard | **DONE**: backend/model/controller quick-switch, start/stop, typed + mic turns, big Interrupt, mic mode, state indicator, active-TTS badge, and a live **face preview** (joint stream). |
-| 4 | Polish | log filters, `virtual` headless controller, help overlay + hover tooltips on every control, a persistent face preview visible on all pages, a mechanically-faithful face (two separate silver lip plates, amber eyes + blue acrylic head), and a **Manual control** page (per-motor sliders + live position readouts, `set_joint`/`release_joint`) for jogging/testing the servos directly. Profiles / packaging / LAN-token still open. |
+| 4 | Polish | log filters, `virtual` headless controller, help overlay + hover tooltips on every control, a persistent face preview visible on all pages, a mechanically-faithful face (two separate silver lip plates, amber eyes + blue acrylic head), a **Manual control** page (per-motor sliders + live position readouts, `set_joint`/`release_joint`) for jogging/testing the servos directly, and ✅ **GUI-managed Python setup** (Windows) — `PythonEnvironmentService`/`PythonSetupViewModel` discover an existing venv or system Python 3.12 (preferred) or silently install a private one (python.org installer, no admin/terminal) and build `OhBots` from it; "Launch engine" is gated on it, so a teammate never opens a terminal. Profiles / packaging / LAN-token still open. |
 
 **One cross-platform GUI over the shared Core.** Consolidated to a single **Avalonia**
 app (`ObotControl.App`) that runs natively on Windows, Linux and the Pi (the earlier WinUI 3

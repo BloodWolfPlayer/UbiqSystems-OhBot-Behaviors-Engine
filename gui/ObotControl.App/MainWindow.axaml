@@ -53,7 +53,7 @@
         </DockPanel>
       </Border>
 
-      <TabControl Margin="8,8,0,8">
+      <TabControl Margin="8,8,0,8" SelectedIndex="{Binding SelectedTab}">
         <TabItem Header="Dashboard">
           <views:DashboardView DataContext="{Binding Dashboard}"/>
         </TabItem>

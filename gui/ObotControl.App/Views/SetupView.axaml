@@ -2,10 +2,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:ObotControl.Core.ViewModels;assembly=ObotControl.Core"
              xmlns:core="clr-namespace:ObotControl.Core;assembly=ObotControl.Core"
+             xmlns:views="clr-namespace:ObotControl.App.Views"
              x:Class="ObotControl.App.Views.SetupView"
              x:DataType="vm:SetupViewModel" x:CompileBindings="True">
   <ScrollViewer>
     <StackPanel Margin="10" Spacing="14" MaxWidth="820" HorizontalAlignment="Left">
+
+      <views:PythonSetupView DataContext="{Binding Python}"/>
 
       <StackPanel Orientation="Horizontal" Spacing="10">
         <Button Content="Refresh devices &amp; voices" Command="{Binding RefreshDevicesCommand}" IsEnabled="{Binding Connected}"

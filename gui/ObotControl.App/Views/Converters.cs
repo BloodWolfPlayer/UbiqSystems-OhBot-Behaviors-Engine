@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using ObotControl.Core.Protocol;
+using ObotControl.Core.ViewModels;
 
 namespace ObotControl.App.Views;
 
@@ -10,6 +11,14 @@ public static class Converters
 {
     public static readonly IValueConverter ConnectionBrush = new FuncValueConverter<bool, IBrush>(
         connected => new SolidColorBrush(connected ? Color.FromRgb(46, 160, 87) : Color.FromRgb(90, 98, 112)));
+
+    public static readonly IValueConverter PythonStatusBrush = new FuncValueConverter<PythonSetupStatusKind, IBrush>(kind => kind switch
+    {
+        PythonSetupStatusKind.Ready => new SolidColorBrush(Color.FromRgb(46, 160, 87)),
+        PythonSetupStatusKind.Busy => new SolidColorBrush(Color.FromRgb(64, 160, 214)),
+        PythonSetupStatusKind.Error => new SolidColorBrush(Color.FromRgb(196, 64, 64)),
+        _ => new SolidColorBrush(Color.FromRgb(90, 98, 112)),
+    });
 
     public static readonly IValueConverter StateBrush = new FuncValueConverter<BotState, IBrush>(state => state switch
     {
