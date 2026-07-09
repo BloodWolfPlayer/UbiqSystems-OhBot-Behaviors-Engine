@@ -20,13 +20,19 @@ public partial class SetupViewModel : ObservableObject
     //* Suppresses the auto-persist reaction while we populate fields from config.
     private bool _loading;
 
-    public SetupViewModel(EngineApi api, ConfigStore store, LogsViewModel logs)
+    public SetupViewModel(EngineApi api, ConfigStore store, LogsViewModel logs, PythonSetupViewModel python)
     {
         _api = api;
         _store = store;
         _logs = logs;
+        Python = python;
         _store.Changed += (_, _) => LoadFrom(_store.Current);
     }
+
+    /// <summary>Step 0: guarantees a working Python environment before the engine can even
+    /// be launched. Runs standalone, independent of the engine connection this page
+    /// otherwise gates everything else on.</summary>
+    public PythonSetupViewModel Python { get; }
 
     public string[] SttEngines { get; } = { "google", "vosk" };
     public string[] TtsEngines { get; } = { "auto", "edge", "kokoro", "gtts", "gemini", "piper", "local" };

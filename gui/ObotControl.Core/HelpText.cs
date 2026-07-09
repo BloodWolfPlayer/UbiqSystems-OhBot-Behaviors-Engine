@@ -52,6 +52,19 @@ public static class HelpText
         "Live mirror of the robot's face — head pose, eyes, blinks and lips — from the engine's joint stream.";
 
     // -- setup -------------------------------------------------------------------------
+    public const string PythonSetupIntro =
+        "Guarantees a working Python 3.12 environment before you launch the engine — no " +
+        "terminal needed. Prefers an existing venv (or a system Python 3.12) already on " +
+        "this machine; 'Set up automatically' downloads a private Python and builds one " +
+        "for you if nothing usable is found.";
+    public const string PythonCandidatePick =
+        "Every venv found under the repo root, any system Python 3.12 found, and 'Set up " +
+        "automatically' as a fallback. Picking one prepares it (installs the project's " +
+        "dependencies) if it isn't ready yet, and is remembered for next time.";
+    public const string PythonRefresh = "Re-scan for venvs/system Pythons (e.g. after creating one outside the GUI).";
+    public const string PythonPrepare =
+        "Install/update the project's dependencies into the selected environment. Also " +
+        "how you re-run setup after requirements.txt changes.";
     public const string RefreshDevices = "Re-query the engine host for microphones and installed TTS voices.";
     public const string ComPort = "Serial port the physical OhBot is on (e.g. COM7). Only used by the 'hardware' controller.";
     public const string ApiKey = "Google AI Studio key for the Gemini backend and Gemini TTS. Stored in config.json on the engine.";
@@ -97,8 +110,10 @@ public static class HelpText
         "Run a conversation: choose the backend/model/controller, Start, then type or talk. " +
         "Watch the transcript, hit the big Interrupt button, switch the mic mode, and see the live state and face.";
     public const string PageSetup =
-        "First-run setup: API key, COM port, remote-Ollama SSH, microphone (with a level test), " +
-        "speech-to-text engine, and TTS voices with per-engine Test buttons. Save writes config.json.";
+        "First-run setup: step 0 guarantees a working Python environment (no terminal needed) " +
+        "before Launch engine works, then API key, COM port, remote-Ollama SSH, microphone " +
+        "(with a level test), speech-to-text engine, and TTS voices with per-engine Test buttons. " +
+        "Save writes config.json.";
     public const string PageConfiguration =
         "Fine-tuning: TTS engine + per-engine voice settings, mouth-tuning sliders that apply live while " +
         "talking, servo motion limits, and the ambient behavior modules. Save/Revert with a dirty indicator.";

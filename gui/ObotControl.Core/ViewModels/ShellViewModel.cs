@@ -39,8 +39,9 @@ public partial class ShellViewModel : ObservableObject
     [ObservableProperty] private bool _engineOwned;
     [ObservableProperty] private string? _repoRoot;
     [ObservableProperty] private bool _showHelp;
+    [ObservableProperty] private int _selectedTab;
 
-    public bool CanLaunch => !IsConnected;
+    public bool CanLaunch => !IsConnected && Setup.Python.IsReady;
 
     public ShellViewModel()
     {
@@ -49,7 +50,8 @@ public partial class ShellViewModel : ObservableObject
         Store = new ConfigStore(Api);
         Logs = new LogsViewModel();
         Dashboard = new DashboardViewModel(Api, Logs);
-        Setup = new SetupViewModel(Api, Store, Logs);
+        var python = new PythonSetupViewModel(new PythonEnvironmentService(), new GuiSettingsStore(), Logs);
+        Setup = new SetupViewModel(Api, Store, Logs, python);
         Configuration = new ConfigurationViewModel(Api, Store, Logs);
         ManualControl = new ManualControlViewModel(Api, Logs);
 
@@ -66,8 +68,17 @@ public partial class ShellViewModel : ObservableObject
             else if (e.PropertyName == nameof(DashboardViewModel.Emotion))
                 ManualControl.SyncEmotion(Dashboard.Emotion);
         };
+        Setup.Python.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(PythonSetupViewModel.IsReady)) return;
+            LaunchEngineCommand.NotifyCanExecuteChanged();
+            //* First run / nothing usable yet: land directly on the Setup tab instead of
+            //* leaving the user stuck on a Dashboard whose Launch button is disabled.
+            if (!Setup.Python.IsReady && SelectedTab == 0) SelectedTab = 1;
+        };
 
         RepoRoot = EngineProcess.LocateRepoRoot();
+        if (RepoRoot is not null) Setup.Python.Initialize(RepoRoot);
     }
 
     /// <summary>Wire the UI-thread marshaller; forwards to the client and to child-process output.</summary>
@@ -105,7 +116,22 @@ public partial class ShellViewModel : ObservableObject
         };
         var engine = new EngineProcess(options);
         engine.OutputReceived += (_, line) => _post(() => Logs.AppendRaw(line));
-        engine.Exited += (_, code) => _post(() => Logs.Append("warn", $"engine exited ({code})"));
+        engine.Exited += (_, code) => _post(() =>
+        {
+            EngineOwned = false;
+            //* A nonzero exit here usually just means some other engine (e.g. one left
+            //* running from an earlier session) already owns this port — the connect
+            //* retry above will attach to that one instead, so this isn't a real failure.
+            if (engine.ObservedAddressInUse)
+            {
+                Logs.Append("warn",
+                    $"an engine is already running on {Host}:{Port} — attaching to it instead of the one just launched.");
+            }
+            else
+            {
+                Logs.Append("warn", $"engine exited ({code})");
+            }
+        });
         try
         {
             engine.Start();

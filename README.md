@@ -1,16 +1,16 @@
 # UbiqSystems-OhBot-Behaviors-Engine
 
-A Python pipeline for the Obot chatbot robot, streams LLM responses, parses action/emotion markers, and drives speech and servo motion in real time.
+A Python pipeline for the Obot chatbot robot. It streams LLM responses, parses action/emotion markers, and drives speech and servo motion in real time.
 
 ## Design
 
-System is split into six layers:
+The system splits into six layers:
 
 1. **LLM source**: produces raw streamed text (Gemini, Ollama, or a scripted replay).
 2. **Stream processor**: removes control tags like `[nod]`, buffers text, and emits sentence/action/emotion events.
 3. **Action registry**: maps action names to dedicated robot motion functions.
 4. **Speech engine** (`obot.speech`): our replacement for `ohbot.say()`. Synthesizes each sentence (Gemini TTS or a local offline voice), plays it back interruptibly, animates the lips from the real audio, and fires `[Action]`/`(Emotion)` markers at the exact word they were written on.
-5. **Behavior modules** (`obot.robot.behaviors`): ambient life — blinking, nodding along while you talk to it, subtle sway while speaking, idle eye wandering.
+5. **Behavior modules** (`obot.robot.behaviors`): ambient life, blinking, nodding along while you talk to it, subtle sway while speaking, idle eye wandering.
 6. **Obot controller**: owns the motor mixer and hardware-facing commands. Three implementations: `HardwareObotController` (real servos via the `ohbot` library), `SimulatedObotController` (the digital OhBot window), and `ConsoleObotController` (prints what the robot would do).
 
 ## Data Flow
@@ -35,16 +35,16 @@ flowchart LR
 src/obot/            # the package (run with: python -m obot)
   __main__.py        # CLI entry point + session loop
   config.py          # config.json load/save
-  core/              # pipeline: orchestrator, processor, models, interrupt
-  llm/               # LLM sources: client, gemini, ollama, picker
-  robot/             # controllers (hardware/sim/console), actions, behaviors, joints
-  speech/            # custom say(): TTS engines, player, timeline, mouth animation
-  sim/               # digital OhBot: tkinter face window (python -m obot.sim)
-  audio/             # microphone input and keyboard controls
-  net/               # SSH tunnel for remote Ollama
+  core/               # pipeline: orchestrator, processor, models, interrupt
+  llm/                # LLM sources: client, gemini, ollama, picker
+  robot/              # controllers (hardware/sim/console), actions, behaviors, joints
+  speech/             # custom say(): TTS engines, player, timeline, mouth animation
+  sim/                # digital OhBot: tkinter face window (python -m obot.sim)
+  audio/              # microphone input and keyboard controls
+  net/                # SSH tunnel for remote Ollama
 requirements/        # per-platform dependency lists (windows, linux, pi)
 docs/                # presentation and design material
-ohbotData/           # robot data (motor defs, sounds) — read by the ohbot library
+ohbotData/           # robot data (motor defs, sounds), used by the ohbot library
 system_prompt.txt    # bot persona (edit to change behaviour)
 example_script.txt   # capability-demo script
 config.example.json  # copy to config.json and fill in
@@ -73,7 +73,9 @@ Then install the dependencies for your platform:
 > sudo apt install portaudio19-dev espeak
 > ```
 
-> **Python version:** Use **Python 3.12**. Pre-built wheels for `sounddevice`, `vosk`, and other heavy deps are available for 3.12 on both Windows and Linux. Python 3.13+ is not yet fully supported by the audio stack and gives mixed results.
+> **Python version:** Use **Python 3.12**. Pre-built wheels for `sounddevice`, `vosk`, and other heavy deps are available for 3.12 on both Windows and Linux. Python 3.13+ isn't fully supported by the audio stack yet and gives mixed results.
+
+**On Windows you can skip all of this.** The [desktop GUI](#desktop-gui) sets Python up for you, no terminal required. See below.
 
 ### 2. Configure
 
@@ -97,7 +99,7 @@ python -m obot
 
 Pick one at startup:
 
-1. **Online (Gemini)**: Connects to Google's Generative Language API using a API Key. Every model the key TECHNICALLY has access to is listed live, so you can pick whichever Gemini model you want per session. **MAKE SURE YOU VERIFY THE MODEL FIRST ON THE AISTUDIO SITE!** (Sebastian has the key, just ask.)
+1. **Online (Gemini)**: Connects to Google's Generative Language API using an API key. Every model the key TECHNICALLY has access to is listed live, so you can pick whichever Gemini model you want per session. **MAKE SURE YOU VERIFY THE MODEL FIRST ON THE AISTUDIO SITE!** (Sebastian has the key, just ask.)
 
 2. **Remote Ollama (over SSH)**: Talks to an Ollama server on another machine. The code opens an SSH port-forward using your private key, then speaks plain HTTP through the tunnel as if Ollama were local. The model list comes from the remote `/api/tags`.
 
@@ -109,21 +111,21 @@ Pick one at startup:
 
 ## Speech: the custom say()
 
-`ohbot.say()` is no longer used. Speech is handled by `obot.speech.SpeechEngine`:
+`ohbot.say()` is gone. Speech now runs through `obot.speech.SpeechEngine`:
 
-- **Voices** — pick one with `speech.tts.engine`, or `"auto"` to chain the best available:
-  - **Edge** (`"edge"`) — Microsoft Edge **neural** voices via `edge-tts`. Online, **free, no API key**, and the most natural of the free options (Azure-quality: `en-GB-SoniaNeural`, `en-US-AriaNeural`, ...). Unofficial endpoint, needs internet.
-  - **Kokoro** (`"kokoro"`) — a small open **neural** model running **fully offline** via ONNX. The best *local* voice — clearly more natural than Piper — and faster than real time on CPU. Model (~330 MB) + voices auto-download to `ohbotData/kokoro/` on first use; bundles espeak-ng (no system install). British voices `bf_emma`/`bf_alice`, tune pace with `speed`.
-  - **gTTS** (`"gtts"`) — Google Translate TTS. Online, free, no key, decent; the "voice" is the accent `tld` (`co.uk`, `com`, `com.au`, ...).
-  - **Gemini** (`"gemini"`) — very natural, needs `gemini_api_key`, but **free tier ≈ 3 requests/minute**.
-  - **Piper** (`"piper"`) — offline neural TTS; a solid fallback. Voice `en_GB-cori-high`, model auto-downloads to `ohbotData/piper/`. Pace via `length_scale`.
-  - **Basic local** (`"local"`) — SAPI/espeak, robotic but dependency-free, the last resort.
+- **Voices:** Pick one with `speech.tts.engine`, or leave it on `"auto"` to chain through the best available:
+  - **Edge** (`edge`): Microsoft's neural voices via `edge-tts`. Online, free, no API key, and the most natural-sounding of the free options (Azure quality: `en-GB-SoniaNeural`, `en-US-AriaNeural`, ...). Unofficial endpoint, needs internet.
+  - **Kokoro** (`kokoro`): a small open neural model running fully offline via ONNX. The best local voice, noticeably better than Piper, and faster than real time on CPU. Model (~330 MB) and voices auto-download to `ohbotData/kokoro/` the first time you use it; bundles espeak-ng, so there's nothing to install system-side. British voices `bf_emma`/`bf_alice`, pace via `speed`.
+  - **gTTS** (`gtts`): Google Translate TTS. Online, free, no key, decent quality. The "voice" here is really the accent, set via `tld` (`co.uk`, `com`, `com.au`, ...).
+  - **Gemini** (`gemini`): very natural, but needs `gemini_api_key`, and the free tier only gives you about 3 requests a minute.
+  - **Piper** (`piper`): offline neural TTS, a solid fallback. Voice `en_GB-cori-high`, model auto-downloads to `ohbotData/piper/`. Pace via `length_scale`.
+  - **Basic local** (`local`): SAPI/espeak. Robotic, but dependency-free, and always there as a last resort.
 
-  The online voices (edge/gtts) return MP3, decoded to PCM via `miniaudio`. `"auto"` chains **edge → kokoro → piper → local**, so you get near-Azure quality online, a strong offline voice otherwise, and it never fully fails. A failing engine is benched for `failure_cooldown_s` so it doesn't add a timeout to every sentence.
-- **Fast output.** While a sentence is playing, the next one is already being synthesized (prefetch), so the Gemini round-trip is hidden behind playback.
-- **Interruption at word boundaries.** Barge-in/SPACE no longer kills the audio mid-phoneme: playback finishes the word being voiced (plus a tiny fade) and goes quiet. The remaining sentences are dropped and the LLM is told what was and wasn't said, as before.
-- **Lip sync.** The mouth is animated from the actual audio: an RMS envelope is gated, curved and smoothed into lip positions. Every parameter (`gate`, `gamma`, `attack`, `release`, gains, fps, sync offset) is tunable in `config.json → speech.mouth` — or live with sliders in the simulator.
-- **Timed actions mid-sentence.** `[Nod]` written between two words fires when that word is actually voiced (char position → word timeline → playback clock), not at a guessed fraction of the sentence.
+  The online voices (edge/gtts) come back as MP3 and get decoded to PCM through `miniaudio`. `"auto"` chains edge → kokoro → piper → local, so you get near-Azure quality when you're online and a solid offline voice when you're not; it basically never fully fails. A voice that's currently failing gets benched for `failure_cooldown_s` so it stops adding a timeout to every sentence.
+- **Fast output.** The next sentence starts synthesizing while the current one is still playing, so the round-trip to Gemini (or whichever engine) hides behind playback instead of causing a stutter.
+- **Interruption at word boundaries.** Barge-in and SPACE don't cut the audio off mid-phoneme. Playback finishes the word it's currently voicing (plus a small fade) and then goes quiet. Any remaining sentences get dropped, and the LLM is told on its next turn what was actually said and what wasn't.
+- **Lip sync.** The mouth moves based on the real audio: an RMS envelope gets gated, curved and smoothed into lip positions. Every parameter (`gate`, `gamma`, `attack`, `release`, gains, fps, sync offset) lives in `config.json` under `speech.mouth`, and can be tuned live with sliders in the simulator.
+- **Timed actions mid-sentence.** `[Nod]` written between two words fires exactly when that word gets spoken (character position mapped to a word timeline, mapped to the playback clock), not at some guessed fraction of the sentence.
 
 ## Behavior modules
 
@@ -152,7 +154,7 @@ python -m obot.sim              # standalone speech/motion test bench
 python -m obot.sim --text "Hello [Nod] world! (Happy) Great to see you."
 ```
 
-The window renders head pose, eyes, lids and lips exactly as the mixer would drive the servos, plays the real TTS audio through your speakers, and shows live joint values. The side panel has **mouth tuning sliders** and a **Save to config.json** button — dial in the lip sync there, and the hardware uses the same values. In `python -m obot.sim`, type sentences (tags work) and press Enter while it talks to test word-boundary interruption.
+The window renders head pose, eyes, lids and lips exactly as the mixer would drive the servos, plays the real TTS audio through your speakers, and shows live joint values. The side panel has **mouth tuning sliders** and a **Save to config.json** button, so you can dial in the lip sync there and the hardware will use the same values. In `python -m obot.sim`, type sentences (tags work) and press Enter while it talks to test word-boundary interruption.
 
 **2. Console only** (no window, no audio): when `ohbot` cannot be imported the demo falls back to `ConsoleObotController`, which prints what the robot *would* do and simulates timing. Force it with:
 
@@ -164,7 +166,7 @@ python -m obot --console
 
 ## Microphone input
 
-For the Gemini and Ollama backends you talk to the bot with the host machine's microphone. Capture uses [sounddevice](https://python-sounddevice.readthedocs.io/), which is a cross-platform PortAudio wrapper that installs without a C compiler on Windows.
+For the Gemini and Ollama backends you talk to the bot with the host machine's microphone. Capture uses [sounddevice](https://python-sounddevice.readthedocs.io/), a cross-platform PortAudio wrapper that installs without a C compiler on Windows.
 
 ### Startup picks (after model selection)
 
@@ -188,13 +190,16 @@ Your choice is saved to `config.json` and offered as the default next time.
 ### Vosk offline model setup
 
 Two options.
-Option 1: use run " sprc download vosk " to download and set up a model automatically (recommended).
-Option 2: manually set up a model yourself, which is more work but lets you pick from the full range of Vosk models.
+
+Option 1: run `sprc download vosk` to download and set up a model automatically (recommended).
+
+Option 2: set up a model yourself manually, which is more work but lets you pick from the full range of Vosk models.
+
 1. Download a model from [alphacephei.com/vosk/models](https://alphacephei.com/vosk/models).
-   - `vosk-model-small-en-us-0.15` (~40 MB) — fast, good for the Pi.
-   - `vosk-model-en-us-0.22` (~1.8 GB) — more accurate, heavier.
+   - `vosk-model-small-en-us-0.15` (~40 MB): fast, good for the Pi.
+   - `vosk-model-en-us-0.22` (~1.8 GB): more accurate, heavier.
 2. Unzip it. You get a folder like `vosk-model-small-en-us-0.15/` whose contents are `am/`, `conf/`, `graph/`, `ivector/`, `README`.
-3. Point `audio.vosk_model_path` in `config.json` at **that folder** (the one directly containing `am`, `conf`, `graph` — not a file inside it, not the zip).
+3. Point `audio.vosk_model_path` in `config.json` at **that folder** (the one directly containing `am`, `conf`, `graph`, not a file inside it and not the zip).
 
 ```json
 "audio": {
@@ -210,9 +215,9 @@ Forward slashes work on Windows. Relative paths are resolved from where you run 
 |---|---|
 | `SPACE` | Interrupt the bot while it is speaking |
 | `m` | Mute / unmute the microphone |
-| `p` | Push-to-talk — capture a single utterance then wait |
+| `p` | Push-to-talk: capture a single utterance then wait |
 | `o` | Open mic (back to continuous auto-VAD) |
-| `c` | Switch to **console mode** — type messages instead of speaking |
+| `c` | Switch to **console mode**: type messages instead of speaking |
 | `q` / `Esc` | Quit |
 
 ### Console mode
@@ -240,23 +245,20 @@ It will acknowledge the interruption naturally rather than repeating itself.
 
 ## Desktop GUI
 
-A cross-platform desktop GUI for the whole workflow (setup, config, live conversation)
-lives in [gui/](gui/) — a single **Avalonia** app (`ObotControl.App`) that runs natively on
-Windows, Linux and the Pi, a thin client over the shared `ObotControl.Core`
-(see [gui/README.md](gui/README.md)). Quick start:
+There's a desktop GUI for the whole workflow (setup, config, live conversation) in [gui/](gui/): a single **Avalonia** app (`ObotControl.App`) that runs natively on Windows, Linux and the Pi, sitting as a thin client over the shared `ObotControl.Core` (full details in [gui/README.md](gui/README.md)).
+
+On Windows, the GUI can also set Python up for you. No venv to create, no `pip install`, no terminal at all. (I call it Baby Mode) It finds an existing environment if you already have one, or downloads and installs a private Python and builds one for you if you don't. Quick start:
 
 ```bash
 cd gui
 dotnet run --project ObotControl.App/ObotControl.App.csproj
 ```
 
-Then click **Launch engine** (or **Attach**) — the GUI drives everything below over the
-control server. You can also run the server standalone:
+Then click **Launch engine** (or **Attach**), and the GUI drives everything below over the control server. You can also run the server standalone:
 
 ## GUI control server (`--serve`)
 
-The GUI does not re-implement any of the engine. Instead the engine exposes itself over a
-local WebSocket and the GUI is a thin client. Start the server with:
+The GUI doesn't re-implement any of the engine. Instead the engine exposes itself over a local WebSocket and the GUI is a thin client. Start the server with:
 
 ```bash
 python -m obot --serve                 # headless "virtual" controller, ws://127.0.0.1:8765
@@ -280,15 +282,15 @@ and `error`.
 
 | Method | Purpose |
 |---|---|
-| `get_config` / `set_config` | full JSON ⇄ validated + atomically saved; hot-applies `speech.mouth`, `motion`, `behaviors` to a running session |
+| `get_config` / `set_config` | full JSON in/out, validated and atomically saved; hot-applies `speech.mouth`, `motion`, `behaviors` to a running session |
 | `list_mics` / `test_mic` | enumerate mics; `test_mic {index}` streams `miclevel` events for ~3 s |
 | `list_gemini_models` / `list_ollama_models` | live model lists (key / SSH tunnel from config) |
 | `list_tts_voices` / `speak_test` | voices per engine; synthesize a test sentence on the host |
-| `session_start` / `session_stop` | `{backend, model, controller}` — start/stop a conversation |
+| `session_start` / `session_stop` | `{backend, model, controller}`, starts/stops a conversation |
 | `send_text` / `interrupt` / `set_mic_mode` | one typed turn; word-boundary interrupt; `vad`/`ptt`/`muted` |
 | `get_state` | `{session, backend, model, controller, state, mic_mode, tts_engine_active}` |
 
-**Smoke test** (no robot, no API key needed — runs against a scripted backend):
+**Smoke test** (no robot or API key needed, runs against a scripted backend):
 
 ```bash
 OhBots/Scripts/python.exe tests/test_server_smoke.py                 # controller=virtual
@@ -297,7 +299,7 @@ OhBots/Scripts/python.exe tests/test_server_smoke.py --controller console
 
 It spawns its own server, reads config, lists mics/voices/models, starts a session,
 sends a turn, checks `transcript`/`state`/`speech`/`joints` events, interrupts
-mid-speech, and stops. Exit code 0 = all checks passed.
+mid-speech, and stops. Exit code 0 means all checks passed.
 
 ---
 
@@ -327,7 +329,7 @@ mid-speech, and stops. Exit code 0 = all checks passed.
 | `speech.mouth.*` | Lip-sync tuning: `gate`, `gamma`, `attack`, `release`, `top_gain`, `bottom_gain`, `fps`, `sync_offset_s`. Tune live in the simulator. |
 | `speech.output_device_index` | sounddevice output device for TTS playback. `null` = default speakers. |
 | `motion.*` | Servo mixer: tick rate, slew-rate limits (head vs lips), write threshold. |
-| `behaviors.*` | Ambient behavior modules — see the table above. |
+| `behaviors.*` | Ambient behavior modules, see the table above. |
 
 All of `speech`, `motion` and `behaviors` are optional; missing keys use built-in defaults.
 
@@ -337,9 +339,9 @@ All of `speech`, `motion` and `behaviors` are optional; missing keys use built-i
 
 Edit `system_prompt.txt` to change the bot's persona. The parser recognises three kinds of inline markers:
 
-- **`[Action]`** (square brackets) — trigger robot motions. Built-in: `Nod`, `Blink`, `Wink`, `LookLeft`, `LookRight`, `ShakeHead`. Case-insensitive.
-- **`(Emotion)`** (round brackets) — set the displayed emotion. Built-in: `Happy`, `Sad`, `Confused`, `Angry`, `Exhausted`, `Whispering`, `Shouting`. Stays set until overwritten.
-- **`!DelayX`** — insert a pause of `X` milliseconds after the current sentence ends, before the next begins.
+- **`[Action]`** (square brackets): trigger robot motions. Built-in: `Nod`, `Blink`, `Wink`, `LookLeft`, `LookRight`, `ShakeHead`. Case-insensitive.
+- **`(Emotion)`** (round brackets): set the displayed emotion. Built-in: `Happy`, `Sad`, `Confused`, `Angry`, `Exhausted`, `Whispering`, `Shouting`. Stays set until overwritten.
+- **`!DelayX`**: insert a pause of `X` milliseconds after the current sentence ends, before the next begins.
 
 Everything else is treated as spoken text, split into sentences on `.`, `!`, and `?`.
 

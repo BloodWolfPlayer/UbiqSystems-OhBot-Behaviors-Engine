@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace ObotControl.Core.Services;
@@ -33,6 +34,14 @@ public sealed class EngineProcess : IDisposable
     public bool IsRunning => _process is { HasExited: false };
     public Uri Endpoint => new($"ws://{_options.Host}:{_options.Port}");
 
+    /// <summary>True if stdout/stderr contained a "port already in use" bind failure —
+    /// i.e. some other engine (stray or otherwise) is already listening on this address,
+    /// so a nonzero exit here doesn't mean the engine itself is broken.</summary>
+    public bool ObservedAddressInUse { get; private set; }
+
+    private static readonly string[] AddressInUseMarkers =
+        { "WinError 10048", "address already in use", "[Errno 98]", "[Errno 48]" };
+
     public void Start()
     {
         if (IsRunning) return;
@@ -54,8 +63,8 @@ public sealed class EngineProcess : IDisposable
         foreach (var a in args) psi.ArgumentList.Add(a);
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
-        process.OutputDataReceived += (_, e) => { if (e.Data is not null) OutputReceived?.Invoke(this, e.Data); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) OutputReceived?.Invoke(this, e.Data); };
+        process.OutputDataReceived += (_, e) => { if (e.Data is not null) HandleLine(e.Data); };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) HandleLine(e.Data); };
         process.Exited += (_, _) => Exited?.Invoke(this, process.ExitCode);
 
         process.Start();
@@ -63,6 +72,17 @@ public sealed class EngineProcess : IDisposable
         process.BeginErrorReadLine();
         _process = process;
     }
+
+    private void HandleLine(string line)
+    {
+        if (LooksLikeAddressInUse(line)) ObservedAddressInUse = true;
+        OutputReceived?.Invoke(this, line);
+    }
+
+    /// <summary>Whether a stdout/stderr line looks like a "port already in use" bind
+    /// failure (Windows/macOS/Linux phrasing), as opposed to some other crash.</summary>
+    public static bool LooksLikeAddressInUse(string line) =>
+        AddressInUseMarkers.Any(m => line.Contains(m, StringComparison.OrdinalIgnoreCase));
 
     public void Stop()
     {
