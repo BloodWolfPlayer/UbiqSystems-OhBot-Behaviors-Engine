@@ -214,7 +214,7 @@ class MotionSettings:
     rate_limit: float = 30.0     # max servo travel in positions/sec (head, eyes)
     lip_rate_limit: float = 200.0  # lips need to snap much faster than the head
     write_epsilon: float = 0.05  # skip serial writes smaller than this position change
-    move_speed: int = 10         # ohbot speed argument used for mixer writes
+    move_speed: int = 3         # ohbot speed argument used for mixer writes
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> "MotionSettings":

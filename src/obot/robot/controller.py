@@ -151,7 +151,7 @@ class AnimatedObotController(ObotController):
         gemini_api_key: str = "",
     ) -> None:
         super().__init__()
-        self.motion = motion_settings or MotionSettings()
+        self.motion = motion_settings or MotionSettings() # points to config file determing motion rate 
         self.speech = SpeechEngine(speech_settings or SpeechSettings(), gemini_api_key)
 
         self._offset_requests: list[MotionOffset] = []
@@ -213,7 +213,7 @@ class AnimatedObotController(ObotController):
         while not self._stop_event.wait(tick):
             targets = {j: joints.REST_POSITION for j in joints.ALL_JOINTS}
             sums = {j: 0.0 for j in joints.ALL_JOINTS}
-            counts = {j: 1 for j in joints.ALL_JOINTS}
+            counts = {j: 0 for j in joints.ALL_JOINTS}
 
             with self._offset_lock:
                 expired: list[MotionOffset] = []
@@ -231,7 +231,10 @@ class AnimatedObotController(ObotController):
                     self._offset_requests.remove(req)
 
             for j in joints.ALL_JOINTS:
-                targets[j] = joints.REST_POSITION + sums[j] / counts[j]
+                if counts[j] > 0:
+                    targets[j] = sums[j] / counts[j]
+                else:
+                    targets[j] = joints.REST_POSITION
 
             #* Speech lips ride on top of whatever the offsets decided (an emotion
             #* can hold the mouth corners while the visemes open/close it).
