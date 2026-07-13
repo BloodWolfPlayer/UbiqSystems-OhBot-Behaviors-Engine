@@ -228,9 +228,22 @@ public class FaceControl : Control
         ctx.DrawEllipse(ball, null, center, r, r);
 
         // Iris carries the eye servos plus a touch of the head yaw, so the gaze
-        // stays glued to the sphere as the head turns.
-        double px = cx + D(pose.EyeTurn) * r * 0.11 + yaw * r * 0.16;
-        double py = cy + D(pose.EyeTilt) * r * 0.11;
+        // stays glued to the sphere as the head turns. Clamp the offset so the
+        // iris (radius 0.58r) never crosses the eyeball's edge, however extreme
+        // the joint values are.
+        double irisR = r * 0.58;
+        double dx = D(pose.EyeTurn) * r * 0.11 + yaw * r * 0.16;
+        double dy = D(pose.EyeTilt) * r * 0.11;
+        double maxOffset = (r - irisR) * 0.9;
+        double dist = Math.Sqrt(dx * dx + dy * dy);
+        if (dist > maxOffset && dist > 0)
+        {
+            double scale = maxOffset / dist;
+            dx *= scale;
+            dy *= scale;
+        }
+        double px = cx + dx;
+        double py = cy + dy;
         var iris = new RadialGradientBrush
         {
             Center = new RelativePoint(0.45, 0.42, RelativeUnit.Relative),
@@ -239,10 +252,17 @@ public class FaceControl : Control
         iris.GradientStops.Add(new GradientStop(Color.FromRgb(242, 178, 74), 0));
         iris.GradientStops.Add(new GradientStop(Color.FromRgb(216, 145, 43), 0.6));
         iris.GradientStops.Add(new GradientStop(Color.FromRgb(150, 96, 24), 1));
-        ctx.DrawEllipse(iris, IrisEdge, new Point(px, py), r * 0.58, r * 0.58);
-        ctx.DrawEllipse(Pupil, null, new Point(px, py), r * 0.27, r * 0.27);
-        ctx.DrawEllipse(CatchLight, null, new Point(px - r * 0.16, py - r * 0.18), r * 0.09, r * 0.09);
-        ctx.DrawEllipse(GlintLight, null, new Point(px + r * 0.15, py + r * 0.14), r * 0.05, r * 0.05);
+
+        // Belt-and-suspenders: the offset clamp above already keeps the iris inside
+        // the eyeball, but clip to the eyeball circle too so nothing can ever paint
+        // outside it, even if the radii above are tuned differently later.
+        using (ctx.PushGeometryClip(new EllipseGeometry(eyeRect)))
+        {
+            ctx.DrawEllipse(iris, IrisEdge, new Point(px, py), irisR, irisR);
+            ctx.DrawEllipse(Pupil, null, new Point(px, py), r * 0.27, r * 0.27);
+            ctx.DrawEllipse(CatchLight, null, new Point(px - r * 0.16, py - r * 0.18), r * 0.09, r * 0.09);
+            ctx.DrawEllipse(GlintLight, null, new Point(px + r * 0.15, py + r * 0.14), r * 0.05, r * 0.05);
+        }
 
         // Eyelid: a shell-blue disc clipped to the eyeball. LidBlink 5 = open (disc
         // lifted a full eye-height above), 0 = closed (disc centred over the eye);

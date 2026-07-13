@@ -73,6 +73,15 @@
             <TextBlock Text="Vosk model path" VerticalAlignment="Center"/>
             <TextBox Text="{Binding VoskModelPath}" Width="280" ToolTip.Tip="{x:Static core:HelpText.VoskModel}"/>
           </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <ComboBox ItemsSource="{Binding VoskModelOptions}" SelectedItem="{Binding SelectedVoskModelOption}" Width="260"/>
+            <Button Content="Auto-setup Vosk model" Command="{Binding SetupVoskCommand}"
+                    ToolTip.Tip="{x:Static core:HelpText.VoskAutoSetup}"/>
+            <Button Content="Cancel" Command="{Binding CancelVoskSetupCommand}" IsVisible="{Binding VoskSetupBusy}"/>
+          </StackPanel>
+          <ProgressBar Minimum="0" Maximum="100" Value="{Binding VoskSetupPercent}" IsIndeterminate="{Binding VoskSetupIndeterminate}"
+                       IsVisible="{Binding VoskSetupBusy}" Height="10"/>
+          <TextBlock Text="{Binding VoskSetupStatus}" Foreground="#9FB2C8"/>
         </StackPanel>
       </Border>
 

@@ -17,14 +17,19 @@ public partial class SetupViewModel : ObservableObject
     private readonly EngineApi _api;
     private readonly ConfigStore _store;
     private readonly LogsViewModel _logs;
+    private readonly VoskModelSetupService _voskService;
+    private string _repoRoot = "";
+    private CancellationTokenSource? _voskCts;
     // Suppresses the auto-persist reaction while we populate fields from config.
     private bool _loading;
 
-    public SetupViewModel(EngineApi api, ConfigStore store, LogsViewModel logs, PythonSetupViewModel python)
+    public SetupViewModel(
+        EngineApi api, ConfigStore store, LogsViewModel logs, PythonSetupViewModel python, VoskModelSetupService voskService)
     {
         _api = api;
         _store = store;
         _logs = logs;
+        _voskService = voskService;
         Python = python;
         _store.Changed += (_, _) => LoadFrom(_store.Current);
     }
@@ -33,6 +38,10 @@ public partial class SetupViewModel : ObservableObject
     /// be launched. Runs standalone, independent of the engine connection this page
     /// otherwise gates everything else on.</summary>
     public PythonSetupViewModel Python { get; }
+
+    /// <summary>Repo root, needed to place downloaded Vosk models under ohbotData/vosk/. Set
+    /// once by the shell after the repo root is resolved (mirrors Python.Initialize).</summary>
+    public void SetRepoRoot(string repoRoot) => _repoRoot = repoRoot;
 
     public string[] SttEngines { get; } = { "google", "vosk" };
     public string[] TtsEngines { get; } = { "auto", "edge", "kokoro", "gtts", "gemini", "piper", "local" };
@@ -60,6 +69,13 @@ public partial class SetupViewModel : ObservableObject
     [ObservableProperty] private MicDevice? _selectedMic;
     [ObservableProperty] private string _sttEngine = "google";
     [ObservableProperty] private string _voskModelPath = "";
+
+    public IReadOnlyList<VoskModelOption> VoskModelOptions => VoskModelSetupService.Catalog;
+    [ObservableProperty] private VoskModelOption? _selectedVoskModelOption = VoskModelSetupService.Catalog[0];
+    [ObservableProperty] private bool _voskSetupBusy;
+    [ObservableProperty] private double _voskSetupPercent;
+    [ObservableProperty] private bool _voskSetupIndeterminate;
+    [ObservableProperty] private string _voskSetupStatus = "";
 
     [ObservableProperty] private string _ttsEngine = "auto";
     [ObservableProperty] private string? _geminiVoice;
@@ -189,6 +205,68 @@ public partial class SetupViewModel : ObservableObject
         }
         finally { MicTesting = false; }
     }
+
+    partial void OnVoskSetupBusyChanged(bool value) => SetupVoskCommand.NotifyCanExecuteChanged();
+
+    private bool CanSetupVosk() => !VoskSetupBusy;
+
+    /// <summary>Downloads the selected Vosk model into ohbotData/vosk/ and points
+    /// audio.vosk_model_path/stt_engine at it — no manual download/unzip/config-edit needed.
+    /// Saves immediately if connected (like the mic picker); otherwise just sets the fields
+    /// so a later Save applies them.</summary>
+    [RelayCommand(CanExecute = nameof(CanSetupVosk))]
+    private async Task SetupVoskAsync()
+    {
+        if (SelectedVoskModelOption is null) { VoskSetupStatus = "pick a model first"; return; }
+        if (string.IsNullOrWhiteSpace(_repoRoot)) { VoskSetupStatus = "could not locate the repo root"; return; }
+
+        var option = SelectedVoskModelOption;
+        VoskSetupBusy = true;
+        VoskSetupIndeterminate = true;
+        VoskSetupPercent = 0;
+        _voskCts = new CancellationTokenSource();
+        var progress = new Progress<SetupProgress>(p =>
+        {
+            if (p.PercentComplete is { } pct) { VoskSetupPercent = pct; VoskSetupIndeterminate = false; }
+            else { VoskSetupIndeterminate = true; }
+            VoskSetupStatus = p.Message;
+            _logs.Append(p.IsError ? "error" : "info", $"[vosk-setup:{p.Stage}] {p.Message}");
+        });
+
+        try
+        {
+            var modelDir = await _voskService.DownloadAndInstallAsync(option, _repoRoot, progress, _voskCts.Token)
+                .ConfigureAwait(true);
+            SttEngine = "vosk";
+            VoskModelPath = modelDir;
+            if (Connected)
+            {
+                await SaveAsync();
+                VoskSetupStatus = $"{option.DisplayName} ready and saved";
+            }
+            else
+            {
+                VoskSetupStatus = $"{option.DisplayName} ready — connect and Save to apply";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            VoskSetupStatus = "Vosk setup cancelled.";
+        }
+        catch (Exception ex)
+        {
+            _logs.Append("error", $"vosk model setup failed: {ex.Message}");
+            VoskSetupStatus = $"setup failed: {ex.Message}";
+        }
+        finally
+        {
+            VoskSetupBusy = false;
+            _voskCts = null;
+        }
+    }
+
+    [RelayCommand]
+    private void CancelVoskSetup() => _voskCts?.Cancel();
 
     [RelayCommand]
     private async Task TestVoiceAsync(string engine)

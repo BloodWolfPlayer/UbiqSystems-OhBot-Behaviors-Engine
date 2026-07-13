@@ -4,6 +4,7 @@ import asyncio
 import json
 import threading
 from abc import ABC, abstractmethod
+from collections import deque
 from typing import Callable, Literal
 
 from ..core import events
@@ -477,6 +478,9 @@ class AudioInput:
 
     # Onset needs sustained loudness so a single click does not trip a barge-in.
     _ONSET_FRAMES = 4
+    # Rolling pre-buffer kept ahead of onset so the frames that *proved* loudness
+    # (and a touch of leading silence) are handed to the recognizer instead of lost.
+    _PREROLL_FRAMES = _ONSET_FRAMES + 2
     # Phrase ends after this many consecutive quiet frames.
     _SILENCE_FRAMES = 25
     # Hard cap so a noisy room cannot record forever.
@@ -653,11 +657,17 @@ class AudioInput:
             # Can't do onset detection without numpy; skip this backend entirely.
             return ""
 
-        # Phase A: wait for onset (also the barge-in trigger).
+        # Phase A: wait for onset (also the barge-in trigger). Every frame read here is
+        # kept in a short rolling pre-buffer so that once onset fires, the loud frames
+        # that proved it (plus a touch of leading silence) are still available instead
+        # of only the single frame where the run happened to cross the threshold —
+        # otherwise the start of the word that triggered detection gets cut off.
         loud_run = 0
+        preroll: deque[bytes] = deque(maxlen=self._PREROLL_FRAMES)
         while not self._stop.is_set() and self._should_capture():
             frame, _ = stream.read(chunk)
             frame_bytes = _mono_bytes(frame)
+            preroll.append(frame_bytes)
             speaking = self._speaking.is_set()
             threshold = base_threshold * (self._barge_in_factor if speaking else 1.0)
             if _rms_int16(frame_bytes) >= threshold:
@@ -668,7 +678,7 @@ class AudioInput:
                     self._notify(self.on_user_speech_start)
                     try:
                         return self._record_phrase(
-                            stream, sample_rate, [frame_bytes], base_threshold
+                            stream, sample_rate, list(preroll), base_threshold
                         )
                     finally:
                         self._notify(self.on_user_speech_end)

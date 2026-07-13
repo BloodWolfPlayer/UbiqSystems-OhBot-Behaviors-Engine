@@ -73,6 +73,9 @@ public static class HelpText
     public const string TestMic = "Record ~3 seconds from the selected mic; the bar shows the live level.";
     public const string SttEngine = "Speech-to-text: 'google' (online, accurate) or 'vosk' (offline, needs a model folder).";
     public const string VoskModel = "Folder of an unzipped Vosk model (contains am/, conf/, graph/). Only needed for offline STT.";
+    public const string VoskAutoSetup =
+        "Download the selected Vosk model from alphacephei.com and unzip it into ohbotData/vosk/, " +
+        "then fill in the STT engine and model path above automatically — no manual download needed.";
     public const string TtsEngine =
         "Which voice to speak with. 'auto' chains the best available (edge → kokoro → piper → " +
         "local), falling through on failure. Or pin one: edge (online, best), kokoro (offline, " +

@@ -51,7 +51,7 @@ public partial class ShellViewModel : ObservableObject
         Logs = new LogsViewModel();
         Dashboard = new DashboardViewModel(Api, Logs);
         var python = new PythonSetupViewModel(new PythonEnvironmentService(), new GuiSettingsStore(), Logs);
-        Setup = new SetupViewModel(Api, Store, Logs, python);
+        Setup = new SetupViewModel(Api, Store, Logs, python, new VoskModelSetupService());
         Configuration = new ConfigurationViewModel(Api, Store, Logs);
         ManualControl = new ManualControlViewModel(Api, Logs);
 
@@ -78,7 +78,11 @@ public partial class ShellViewModel : ObservableObject
         };
 
         RepoRoot = EngineProcess.LocateRepoRoot();
-        if (RepoRoot is not null) Setup.Python.Initialize(RepoRoot);
+        if (RepoRoot is not null)
+        {
+            Setup.Python.Initialize(RepoRoot);
+            Setup.SetRepoRoot(RepoRoot);
+        }
     }
 
     /// <summary>Wire the UI-thread marshaller; forwards to the client and to child-process output.</summary>
