@@ -15,8 +15,8 @@ from ..speech.player import PlaybackError
 from ..speech.tts import TTSError
 from . import emotions, joints
 
-#* ohbot is imported lazily inside HardwareObotController.__init__ so the COM port scan
-#* does not block startup. Module-level None until the hardware controller is first created.
+# ohbot is imported lazily inside HardwareObotController.__init__ so the COM port scan
+# does not block startup. Module-level None until the hardware controller is first created.
 ohbot = None  # type: ignore
 
 MarkerCallback = Callable[[SpeechMarker], Awaitable[None]]
@@ -60,10 +60,10 @@ class MotionOffset:
 class ObotController(ABC):
     """Robot-facing commands live here."""
 
-    #* Name of the last emotion whose pose was actually recognised (see
-    #* emotions.resolve); a plain class attribute so every controller — including
-    #* motor-less ConsoleObotController — has a sensible default without its own
-    #* __init__. Subclasses set an instance attribute of the same name on change.
+    # Name of the last emotion whose pose was actually recognised (see
+    # emotions.resolve); a plain class attribute so every controller — including
+    # motor-less ConsoleObotController — has a sensible default without its own
+    # __init__. Subclasses set an instance attribute of the same name on change.
     current_emotion: str = "Neutral"
 
     @abstractmethod
@@ -151,21 +151,21 @@ class AnimatedObotController(ObotController):
         gemini_api_key: str = "",
     ) -> None:
         super().__init__()
-        self.motion = motion_settings or MotionSettings() # points to config file determing motion rate 
+        self.motion = motion_settings or MotionSettings()
         self.speech = SpeechEngine(speech_settings or SpeechSettings(), gemini_api_key)
 
         self._offset_requests: list[MotionOffset] = []
         self._offset_lock = threading.Lock()
-        #* (top_delta, bottom_delta) written by the speech engine's mouth sink;
-        #* read by the mixer thread. Replaced atomically as a tuple.
+        # (top_delta, bottom_delta) written by the speech engine's mouth sink;
+        # read by the mixer thread. Replaced atomically as a tuple.
         self._lips: tuple[float, float] = (0.0, 0.0)
-        #* Active emotion's persistent per-joint bias (joint_id -> delta from
-        #* REST_POSITION), set by set_emotion and read every mixer tick. Replaced
-        #* atomically as a whole dict -- same pattern as self._lips above -- so the
-        #* mixer thread never sees a half-written pose.
+        # Active emotion's persistent per-joint bias (joint_id -> delta from
+        # REST_POSITION), set by set_emotion and read every mixer tick. Replaced
+        # atomically as a whole dict -- same pattern as self._lips above -- so the
+        # mixer thread never sees a half-written pose.
         self._emotion_pose: emotions.EmotionPose = {}
-        #* joint_id -> absolute position (0..10), set by the GUI's manual control
-        #* panel. Wins over offsets/lips for that joint until explicitly released.
+        # joint_id -> absolute position (0..10), set by the GUI's manual control
+        # panel. Wins over offsets/lips for that joint until explicitly released.
         self._manual_overrides: dict[int, float] = {}
         self._manual_lock = threading.Lock()
         self._speech_stopped = threading.Event()
@@ -205,8 +205,8 @@ class AnimatedObotController(ObotController):
         tick = max(0.01, self.motion.tick_s)
         current = {j: joints.REST_POSITION for j in joints.ALL_JOINTS}
         written = dict(current)
-        #* Joint stream for the GUI face preview, throttled to ~15 Hz and only built
-        #* when something is actually listening (the console/hardware flow pays nothing).
+        # Joint stream for the GUI face preview, throttled to ~15 Hz and only built
+        # when something is actually listening (the console/hardware flow pays nothing).
         last_emit = 0.0
         emit_period = 1.0 / 15.0
 
@@ -221,9 +221,9 @@ class AnimatedObotController(ObotController):
                     if req.duration_s <= 0:
                         expired.append(req)
                         continue
-                    #* Offsets are blended by averaging (baseline counts once), so
-                    #* overlapping actions soften each other instead of stacking
-                    #* into a slam past the servo limits.
+                    # Offsets are blended by averaging (baseline counts once), so
+                    # overlapping actions soften each other instead of stacking
+                    # into a slam past the servo limits.
                     sums[req.joint_id] += req.delta
                     counts[req.joint_id] += 1
                     req.duration_s -= tick
@@ -236,33 +236,32 @@ class AnimatedObotController(ObotController):
                 else:
                     targets[j] = joints.REST_POSITION
 
-            #* Speech lips ride on top of whatever the offsets decided (an emotion
-            #* can hold the mouth corners while the visemes open/close it).
+            # Speech lips ride on top of whatever the offsets decided (an emotion
+            # can hold the mouth corners while the visemes open/close it).
             lip_top, lip_bottom = self._lips
             targets[joints.TOPLIP] += lip_top
             targets[joints.BOTTOMLIP] += lip_bottom
 
-            #* Active emotion nudges the resting pose itself: everything computed
-            #* above (ambient offsets, lips) targets a plain neutral rest, so adding
-            #* the bias here carries it along -- the face keeps blinking/talking/
-            #* wandering normally, just around a shifted baseline instead of dead center.
+            # Active emotion nudges the resting pose itself: everything computed
+            # above (ambient offsets, lips) targets a plain neutral rest, so adding
+            # the bias here carries it along -- the face keeps blinking/talking/
+            # wandering normally, just around a shifted baseline instead of dead center.
             if self._emotion_pose:
                 for j, delta in self._emotion_pose.items():
                     targets[j] += delta
 
-            #* Manual GUI overrides win outright: a held joint ignores behaviors,
-            #* offsets and speech lips until the GUI releases it.
+            # Manual GUI overrides win outright: a held joint ignores behaviors,
+            # offsets and speech lips until the GUI releases it.
             with self._manual_lock:
                 if self._manual_overrides:
                     targets.update(self._manual_overrides)
 
             for j in joints.ALL_JOINTS:
-                #* Limiter later !!!
                 target = min(10.0, max(0.0, targets[j]))
-                #* Slew-rate limiting: travel toward the target at a bounded
-                #* positions-per-second speed so motion is smooth, not snappy.
-                #* Lips and lids use a much higher rate — visemes and blinks
-                #* have to hit their pose within a frame or two.
+                # Slew-rate limiting: travel toward the target at a bounded
+                # positions-per-second speed so motion is smooth, not snappy.
+                # Lips and lids use a much higher rate — visemes and blinks
+                # have to hit their pose within a frame or two.
                 rate = (
                     self.motion.lip_rate_limit
                     if j in joints.FAST_JOINTS
@@ -276,8 +275,8 @@ class AnimatedObotController(ObotController):
                     self._write_motor(j, current[j], self.motion.move_speed)
                     written[j] = current[j]
 
-            #* Stream the smoothed pose so a GUI can mirror the face. Gated so the
-            #* dict is not even built when unobserved; throttled below the tick rate.
+            # Stream the smoothed pose so a GUI can mirror the face. Gated so the
+            # dict is not even built when unobserved; throttled below the tick rate.
             now = time.monotonic()
             if now - last_emit >= emit_period and events.has_subscribers(events.JOINTS):
                 last_emit = now
@@ -305,10 +304,10 @@ class AnimatedObotController(ObotController):
         on_marker: MarkerCallback | None = None,
     ) -> None:
         print(f"[speech] {sentence}")
-        #* Announce the sentence up front so a GUI shows the bot bubble with no latency;
-        #* the active engine is only known once synthesis returns (emitted below).
+        # Announce the sentence up front so a GUI shows the bot bubble with no latency;
+        # the active engine is only known once synthesis returns (emitted below).
         events.emit(events.SPEECH, {"text": sentence, "event": "spoken", "engine": None})
-        #* Cleared per sentence so a stop from the previous sentence doesn't suppress this one.
+        # Cleared per sentence so a stop from the previous sentence doesn't suppress this one.
         self._speech_stopped.clear()
 
         if not any(ch.isalnum() for ch in sentence):
@@ -327,8 +326,8 @@ class AnimatedObotController(ObotController):
                 "engine": result.engine,
             })
         except (TTSError, PlaybackError) as exc:
-            #* No audio possible: keep the conversation alive with simulated pacing
-            #* so sentences, interrupts and turn-taking still behave sensibly.
+            # No audio possible: keep the conversation alive with simulated pacing
+            # so sentences, interrupts and turn-taking still behave sensibly.
             print(f"[speech] audio unavailable ({exc}); simulating timing.")
             events.emit(events.LOG, {"level": "warn", "message": f"audio unavailable ({exc}); simulating timing."})
             await self._simulate_sentence(sentence, markers, on_marker)
@@ -363,8 +362,8 @@ class AnimatedObotController(ObotController):
         self.speech.request_stop()
 
     def close(self) -> None:
-        #* Defensive: if __init__ bailed early these attributes may not exist,
-        #* and __del__ must not raise during garbage collection.
+        # Defensive: if __init__ bailed early these attributes may not exist,
+        # and __del__ must not raise during garbage collection.
         speech = getattr(self, "speech", None)
         if speech is not None:
             speech.close()
@@ -405,15 +404,15 @@ class AnimatedObotController(ObotController):
     async def blink(self, announce: bool = True) -> None:
         if announce:
             print("[action] blink")
-            #* Only script/marker-driven blinks are announced; ambient auto_blink
-            #* passes announce=False so it stays off both the console and the event feed.
+            # Only script/marker-driven blinks are announced; ambient auto_blink
+            # passes announce=False so it stays off both the console and the event feed.
             events.emit(events.ACTION, {"name": "blink"})
         self.enqueue_offset(joints.LIDBLINK, -15.0, 0.5)
         await asyncio.sleep(0.5)
 
     async def wink(self) -> None:
-        #* Obot has a single shared lid servo, so a wink is rendered as a quick,
-        #* snappier blink — the closest the hardware can manage.
+        # Obot has a single shared lid servo, so a wink is rendered as a quick,
+        # snappier blink — the closest the hardware can manage.
         print("[action] wink")
         events.emit(events.ACTION, {"name": "wink"})
         self.enqueue_offset(joints.LIDBLINK, -10.0, 0.2)
@@ -434,18 +433,18 @@ class AnimatedObotController(ObotController):
 
     async def set_emotion(self, emotion: str) -> None:
         print(f"[emotion] {emotion}")
-        #* Always announce the raw name -- the transcript chip shows whatever the
-        #* LLM wrote even if it doesn't map to a recognised pose below.
+        # Always announce the raw name -- the transcript chip shows whatever the
+        # LLM wrote even if it doesn't map to a recognised pose below.
         events.emit(events.EMOTION, {"name": emotion})
-        #* combined_pose layers NEUTRAL's rest-position override underneath the
-        #* named emotion's own deltas, so recalibrating NEUTRAL shifts every
-        #* emotion's baseline (see emotions.py), not just the plain Neutral state.
+        # combined_pose layers NEUTRAL's rest-position override underneath the
+        # named emotion's own deltas, so recalibrating NEUTRAL shifts every
+        # emotion's baseline (see emotions.py), not just the plain Neutral state.
         pose = emotions.combined_pose(emotion)
         if pose is None:
             return
-        #* Persistent until the next set_emotion call: unlike enqueue_offset, this
-        #* does not decay, so the face holds the pose for as long as the emotion
-        #* is active (see the mixer's self._emotion_pose blend in _mixer_loop).
+        # Persistent until the next set_emotion call: unlike enqueue_offset, this
+        # does not decay, so the face holds the pose for as long as the emotion
+        # is active (see the mixer's self._emotion_pose blend in _mixer_loop).
         self.current_emotion = emotion
         self._emotion_pose = pose
 
@@ -475,7 +474,7 @@ class HardwareObotController(AnimatedObotController):
                 "face, or ConsoleObotController (the demo falls back to it automatically)."
             )
 
-        #* Serialise access to the ohbot library, which is not thread-safe.
+        # Serialise access to the ohbot library, which is not thread-safe.
         self._ohbot_lock = threading.Lock()
         with self._ohbot_lock:
             ohbot.reset()
@@ -507,8 +506,8 @@ class SimulatedObotController(AnimatedObotController):
         motion_settings: MotionSettings | None = None,
         gemini_api_key: str = "",
     ) -> None:
-        #* Duck-typed face: anything with set_motor(joint_id, position). Normally a
-        #* :class:`obot.sim.face.FaceWindow`.
+        # Duck-typed face: anything with set_motor(joint_id, position). Normally a
+        # :class:`obot.sim.face.FaceWindow`.
         self._face = face
         super().__init__(
             speech_settings=speech_settings,
@@ -539,8 +538,8 @@ class VirtualObotController(AnimatedObotController):
     """
 
     def _write_motor(self, joint_id: int, position: float, speed: int) -> None:
-        #* No physical or on-screen output: the mixer still computes and emits every
-        #* joint's position (see _mixer_loop), which is all a GUI face preview needs.
+        # No physical or on-screen output: the mixer still computes and emits every
+        # joint's position (see _mixer_loop), which is all a GUI face preview needs.
         del joint_id, position, speed
 
 
@@ -557,8 +556,8 @@ class ConsoleObotController(ObotController):
 
     def __init__(self) -> None:
         super().__init__()
-        #* Tripped by stop_speaking so an in-flight simulated utterance ends early and a
-        #* still-queued one is skipped — the same semantics as the hardware controller.
+        # Tripped by stop_speaking so an in-flight simulated utterance ends early and a
+        # still-queued one is skipped — the same semantics as the hardware controller.
         self._speech_stopped = threading.Event()
 
     async def speak_sentence(
@@ -570,8 +569,8 @@ class ConsoleObotController(ObotController):
         print(f"[speech] {sentence}")
         events.emit(events.SPEECH, {"text": sentence, "event": "spoken", "engine": "console"})
         self._speech_stopped.clear()
-        #* Roughly track real TTS pacing so barge-in timing feels realistic, but poll the
-        #* stop flag so an interrupt can cut the "playback" mid-sentence.
+        # Roughly track real TTS pacing so barge-in timing feels realistic, but poll the
+        # stop flag so an interrupt can cut the "playback" mid-sentence.
         estimated_duration = min(0.2 + len(sentence) / 80, 1.5)
         pending = sorted(markers, key=lambda m: m.char_pos)
         fired: list[asyncio.Task] = []
@@ -591,7 +590,7 @@ class ConsoleObotController(ObotController):
             await asyncio.sleep(step)
             elapsed += step
         else:
-            #* Finished naturally: fire whatever was anchored to the sentence end.
+            # Finished naturally: fire whatever was anchored to the sentence end.
             for marker in pending:
                 if on_marker is not None:
                     fired.append(asyncio.create_task(on_marker(marker)))
@@ -642,7 +641,3 @@ class ConsoleObotController(ObotController):
         events.emit(events.EMOTION, {"name": emotion})
         if emotions.resolve(emotion) is not None:
             self.current_emotion = emotion
-
-
-#* Backwards-compatible name for old imports.
-DemoObotController = HardwareObotController

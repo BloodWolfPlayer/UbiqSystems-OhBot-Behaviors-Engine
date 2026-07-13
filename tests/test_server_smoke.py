@@ -123,7 +123,7 @@ async def run_checks(port: int, controller: str) -> None:
         print(f"  [ok] list_tts_voices (gemini={len(voices['gemini'])}, "
               f"piper={len(voices['piper'])}, local={len(voices['local'])})")
 
-        #* Models need a key/tunnel; just confirm the RPC round-trips (ok or a clean error).
+        # Models need a key/tunnel; just confirm the RPC round-trips (ok or a clean error).
         with contextlib.suppress(RuntimeError):
             g = await client.call("list_gemini_models")
             print(f"  [ok] list_gemini_models -> {len(g['models'])}")
@@ -137,8 +137,8 @@ async def run_checks(port: int, controller: str) -> None:
             await client.wait_topic("joints", timeout=10.0)
             print(f"  [ok] joints events streaming ({len(client.by_topic['joints'])} so far)")
 
-            #* Manual control: hold HeadNod fully forward, confirm the joints stream
-            #* reflects the held position, then release it back to ambient control.
+            # Manual control: hold HeadNod fully forward, confirm the joints stream
+            # reflects the held position, then release it back to ambient control.
             await client.call("set_joint", joint="HeadNod", position=10.0)
             held = await _wait_joint_value(client, "HeadNod", 10.0, tolerance=0.2, timeout=5.0)
             assert held, "HeadNod did not reach the manually-held position"
@@ -147,12 +147,12 @@ async def run_checks(port: int, controller: str) -> None:
             await client.call("release_all_joints")
             print("  [ok] release_joint / release_all_joints accepted")
 
-            #* Emotions: applying "Sad" persistently shifts the resting pose away from
-            #* Neutral's own baseline (unlike a one-shot offset, it must not decay), and
-            #* re-selecting "Neutral" returns to exactly that baseline. Compared against
-            #* Neutral's own live value rather than a fixed number, since the exact
-            #* per-emotion deltas (and Neutral's rest-position override itself) are
-            #* hand-tuned and may change -- see robot/emotions.py.
+            # Emotions: applying "Sad" persistently shifts the resting pose away from
+            # Neutral's own baseline (unlike a one-shot offset, it must not decay), and
+            # re-selecting "Neutral" returns to exactly that baseline. Compared against
+            # Neutral's own live value rather than a fixed number, since the exact
+            # per-emotion deltas (and Neutral's rest-position override itself) are
+            # hand-tuned and may change -- see robot/emotions.py.
             names = (await client.call("list_emotions"))["emotions"]
             assert "Sad" in names and "Neutral" in names
 
@@ -188,7 +188,7 @@ async def run_checks(port: int, controller: str) -> None:
         await client.wait_topic("speech", timeout=10.0)
         print("  [ok] state + speech events during the turn")
 
-        #* Interrupt mid-speech and confirm the turn winds down (idle again).
+        # Interrupt mid-speech and confirm the turn winds down (idle again).
         await asyncio.sleep(0.4)
         await client.call("interrupt")
         idle_seen = await _wait_state(client, "idle", timeout=15.0)

@@ -92,9 +92,9 @@ class BehaviorModule:
     settings: ModuleSettings
     states: frozenset[BotState]
     fire: Callable[["ObotController", float], Awaitable[None]]  # (controller, intensity)
-    #* When the manager's state changes, modules not valid in the new state have
-    #* their timer re-rolled so e.g. a listening nod can start soon after the
-    #* user begins talking instead of inheriting a stale 6-second timer.
+    # When the manager's state changes, modules not valid in the new state have
+    # their timer re-rolled so e.g. a listening nod can start soon after the
+    # user begins talking instead of inheriting a stale 6-second timer.
     next_due: float = 0.0
 
 
@@ -102,17 +102,17 @@ class BehaviorModule:
 
 async def _fire_blink(controller: "ObotController", intensity: float) -> None:
     del intensity
-    #* announce=False keeps ambient blinks off the console so they don't spam
-    #* the action log during pickers, typing, and interrupts.
+    # announce=False keeps ambient blinks off the console so they don't spam
+    # the action log during pickers, typing, and interrupts.
     await controller.blink(announce=False)
-    #* Occasional quick double blink reads as much more lifelike than a metronome.
+    # Occasional quick double blink reads as much more lifelike than a metronome.
     if random.random() < 0.2:
         await asyncio.sleep(0.15)
         await controller.blink(announce=False)
 
 
 async def _fire_listening_nod(controller: "ObotController", intensity: float) -> None:
-    #* Two gentle dips — an attentive "mm-hm", far smaller than the [Nod] action.
+    # Two gentle dips — an attentive "mm-hm", far smaller than the [Nod] action.
     dip = 1.2 * intensity
     for _ in range(2):
         if not controller.enqueue_offset(joints.HEADNOD, +dip, 0.22):
@@ -123,8 +123,8 @@ async def _fire_listening_nod(controller: "ObotController", intensity: float) ->
 
 
 async def _fire_speaking_sway(controller: "ObotController", intensity: float) -> None:
-    #* A small drift on one or two joints, held briefly. Random sign/size so the
-    #* head keeps living without ever competing with scripted [Nod]/[LookLeft].
+    # A small drift on one or two joints, held briefly. Random sign/size so the
+    # head keeps living without ever competing with scripted [Nod]/[LookLeft].
     duration = random.uniform(0.5, 1.1)
     choices = [
         (joints.HEADTURN, 1.4),
@@ -139,7 +139,7 @@ async def _fire_speaking_sway(controller: "ObotController", intensity: float) ->
 
 
 async def _fire_idle_wander(controller: "ObotController", intensity: float) -> None:
-    #* Eyes drift somewhere and linger; occasionally the head follows a little.
+    # Eyes drift somewhere and linger; occasionally the head follows a little.
     hold = random.uniform(0.8, 2.0)
     x = random.uniform(-2.0, 2.0) * intensity
     y = random.uniform(-1.2, 1.2) * intensity
@@ -237,8 +237,8 @@ class BehaviorManager:
             state = self.state
 
             if state != last_state:
-                #* Entering a state re-rolls the timers of its modules with a short
-                #* first delay, so the matching behavior shows up promptly.
+                # Entering a state re-rolls the timers of its modules with a short
+                # first delay, so the matching behavior shows up promptly.
                 for module in self.modules:
                     if state in module.states and last_state not in module.states:
                         module.next_due = now + self._roll(module) * 0.4

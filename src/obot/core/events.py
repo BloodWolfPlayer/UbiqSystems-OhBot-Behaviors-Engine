@@ -27,11 +27,11 @@ import threading
 from collections.abc import Callable
 from typing import Any
 
-#* A subscriber is called as cb(topic, data).
+# A subscriber is called as cb(topic, data).
 Subscriber = Callable[[str, Any], None]
 
-#* Canonical topic names, shared by the engine (emitters) and the server (forwarder)
-#* so the two never drift on a stringly-typed key.
+# Canonical topic names, shared by the engine (emitters) and the server (forwarder)
+# so the two never drift on a stringly-typed key.
 STATE = "state"          # {"state": "idle"|"listening"|"speaking"}
 TRANSCRIPT = "transcript"  # {"role": "user", "text": str}
 SPEECH = "speech"        # {"text": str, "event": "spoken"|"cutoff", "engine": str|None}
@@ -79,7 +79,7 @@ class EventBus:
                 print(f"[events] subscriber for '{topic}' raised: {exc}")
 
 
-#* Process-wide default bus and the module-level helpers most call sites use.
+# Process-wide default bus and the module-level helpers most call sites use.
 _BUS = EventBus()
 
 

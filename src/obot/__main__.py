@@ -5,15 +5,15 @@ import asyncio
 import contextlib
 from pathlib import Path
 
-#* Only the lightweight imports live at the top level. The Gemini, Ollama and SSH modules
-#* are imported only inside the functions that need them,
-#* so the scripted demo runs even when httpx, sshtunnel and paramiko are not installed.
+# Only the lightweight imports live at the top level. The Gemini, Ollama and SSH modules
+# are imported only inside the functions that need them,
+# so the scripted demo runs even when httpx, sshtunnel and paramiko are not installed.
 from .core.orchestrator import RobotPipeline
 from .llm.client import ScriptedLLMClient
 from .robot.behaviors import BehaviorManager, BehaviorSettings
 from .robot.controller import ConsoleObotController, ObotController
 
-#* Prompt and script files live at the repo root (two levels up from src/obot/).
+# Prompt and script files live at the repo root (two levels up from src/obot/).
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 SYSTEM_PROMPT_FILE = _REPO_ROOT / "system_prompt.txt"
 EXAMPLE_SCRIPT_FILE = _REPO_ROOT / "example_script.txt"
@@ -227,8 +227,8 @@ async def _voice_session(cfg, pipeline: RobotPipeline) -> None:
 
     loop = asyncio.get_running_loop()
 
-    #* All the input()-based pickers must run BEFORE the raw-mode key listener starts,
-    #* otherwise the listener would swallow the keystrokes the pickers are waiting on.
+    # All the input()-based pickers must run BEFORE the raw-mode key listener starts,
+    # otherwise the listener would swallow the keystrokes the pickers are waiting on.
     try:
         device_index = pick_input_device(cfg.audio.input_device_index)
         backend = pick_stt_engine(cfg.audio.vosk_model_path, default=cfg.audio.stt_engine)
@@ -246,22 +246,22 @@ async def _voice_session(cfg, pipeline: RobotPipeline) -> None:
     interrupt = InterruptController(loop)
     audio.on_barge_in = lambda: interrupt.trigger("voice")
 
-    #* Ambient behaviors: blink always; nod along while the user is talking
-    #* (the mic capture thread flips the listening flag); sway subtly while
-    #* speaking; let the eyes wander when idle.
+    # Ambient behaviors: blink always; nod along while the user is talking
+    # (the mic capture thread flips the listening flag); sway subtly while
+    # speaking; let the eyes wander when idle.
     behaviors = BehaviorManager(pipeline.controller, cfg.behaviors)
     audio.on_user_speech_start = lambda: behaviors.set_listening(True)
     audio.on_user_speech_end = lambda: behaviors.set_listening(False)
     behaviors.start()
 
     quit_event = asyncio.Event()
-    #* Set by the 'c' key (from the listener thread) to flip into typed console mode.
+    # Set by the 'c' key (from the listener thread) to flip into typed console mode.
     console_event = asyncio.Event()
 
     def on_key(ch: str) -> None:
         if ch == " ":
-            #* Only meaningful while the bot is talking; ignore otherwise so we never
-            #* arm an interrupt for a turn that hasn't started.
+            # Only meaningful while the bot is talking; ignore otherwise so we never
+            # arm an interrupt for a turn that hasn't started.
             if audio.is_speaking():
                 interrupt.trigger("keyboard")
         elif ch in ("m", "M"):
@@ -330,9 +330,9 @@ async def _voice_chat_loop(
 
     while not quit_event.is_set():
         if console_mode:
-            #* Typed input. The raw key listener is stopped while we own stdin, so the
-            #* way back to voice is an empty line or ':voice' (the 'c' key can't be read
-            #* here). 'audio' is muted so the mic doesn't fire in the background.
+            # Typed input. The raw key listener is stopped while we own stdin, so the
+            # way back to voice is an empty line or ':voice' (the 'c' key can't be read
+            # here). 'audio' is muted so the mic doesn't fire in the background.
             line = await loop.run_in_executor(None, _read_console_line)
             if line is None or line == "" or line.lower() == ":voice":
                 console_mode = False
@@ -347,7 +347,7 @@ async def _voice_chat_loop(
             await _run_turn(pipeline, audio, interrupt, line, behaviors)
             continue
 
-        #* Voice mode: wait for the next utterance, a quit, or a console-toggle.
+        # Voice mode: wait for the next utterance, a quit, or a console-toggle.
         utterance_task = asyncio.create_task(audio.next_utterance())
         quit_task = asyncio.create_task(quit_event.wait())
         console_task = asyncio.create_task(console_event.wait())
@@ -438,8 +438,8 @@ async def main() -> None:
     if args.serve:
         from .server import serve
 
-        #* The CLI --sim/--console flags choose the server's *default* controller; a
-        #* session_start RPC can still override it per session.
+        # The CLI --sim/--console flags choose the server's *default* controller; a
+        # session_start RPC can still override it per session.
         default_controller = "sim" if args.sim else "console" if args.console else "virtual"
         await serve(host=args.host, port=args.port, default_controller=default_controller)
         return

@@ -19,9 +19,8 @@ async def pick_ollama_model(base_url: str, recents: list[str]) -> str:
 
 
 def _prompt_pick(label: str, all_models: list[str], recents: list[str]) -> str:
-    #* Recently used models are shown at the top of the list and tagged (recent),
-    #* so the most common picks are ez pz to pick. A recent entry is only
-    #* shown if the server still reports it as available, otherwise it is dropped.
+    # Recently used models are shown first and tagged (recent). A recent entry only
+    # appears if the server still reports it as available; stale ones are dropped.
     available = set(all_models)
     ordered_recents = [m for m in recents if m in available]
     rest = [m for m in all_models if m not in ordered_recents]

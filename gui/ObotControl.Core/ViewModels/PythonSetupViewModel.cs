@@ -21,7 +21,7 @@ public partial class PythonSetupViewModel : ObservableObject
     private readonly LogsViewModel _logs;
     private string _repoRoot = "";
     private CancellationTokenSource? _cts;
-    //* Suppresses the auto-persist/auto-prepare reaction while candidates are (re)populated.
+    // Suppresses the auto-persist/auto-prepare reaction while candidates are (re)populated.
     private bool _loading;
 
     public PythonSetupViewModel(PythonEnvironmentService service, GuiSettingsStore settings, LogsViewModel logs)

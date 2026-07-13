@@ -14,8 +14,6 @@ public sealed class EngineApi
 
     public EngineClient Client => _client;
 
-    public Task<bool> PingAsync() => _client.CallAsync("ping").ContinueWith(_ => true);
-
     public async Task<ObotConfig> GetConfigAsync() =>
         (await _client.CallAsync<ObotConfig>("get_config").ConfigureAwait(false))!;
 

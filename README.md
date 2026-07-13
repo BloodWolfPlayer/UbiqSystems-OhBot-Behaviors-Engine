@@ -1,6 +1,6 @@
 # UbiqSystems-OhBot-Behaviors-Engine
 
-A Python pipeline for the Obot chatbot robot. It streams LLM responses, parses action/emotion markers, and drives speech and servo motion in real time.
+The behaviour engine for our OhBot robot ("Ms. Mimic"). It streams LLM responses, parses inline action/emotion markers, and drives speech and servo motion in real time — with a [desktop GUI](#desktop-gui) over the top for setup, configuration and live conversations.
 
 ## Design
 
@@ -11,7 +11,7 @@ The system splits into six layers:
 3. **Action registry**: maps action names to dedicated robot motion functions.
 4. **Speech engine** (`obot.speech`): our replacement for `ohbot.say()`. Synthesizes each sentence (Gemini TTS or a local offline voice), plays it back interruptibly, animates the lips from the real audio, and fires `[Action]`/`(Emotion)` markers at the exact word they were written on.
 5. **Behavior modules** (`obot.robot.behaviors`): ambient life, blinking, nodding along while you talk to it, subtle sway while speaking, idle eye wandering.
-6. **Obot controller**: owns the motor mixer and hardware-facing commands. Three implementations: `HardwareObotController` (real servos via the `ohbot` library), `SimulatedObotController` (the digital OhBot window), and `ConsoleObotController` (prints what the robot would do).
+6. **Obot controller**: owns the motor mixer and hardware-facing commands. Four implementations: `HardwareObotController` (real servos via the `ohbot` library), `SimulatedObotController` (the digital OhBot window), `VirtualObotController` (headless — full mixer and TTS, joints streamed to the GUI's face preview), and `ConsoleObotController` (prints what the robot would do).
 
 ## Data Flow
 
@@ -42,6 +42,8 @@ src/obot/            # the package (run with: python -m obot)
   sim/                # digital OhBot: tkinter face window (python -m obot.sim)
   audio/              # microphone input and keyboard controls
   net/                # SSH tunnel for remote Ollama
+gui/                 # Avalonia desktop GUI (see gui/README.md)
+tests/               # server smoke test (tests/test_server_smoke.py)
 requirements/        # per-platform dependency lists (windows, linux, pi)
 docs/                # presentation and design material
 ohbotData/           # robot data (motor defs, sounds), used by the ohbot library
@@ -290,11 +292,12 @@ and `error`.
 | `send_text` / `interrupt` / `set_mic_mode` | one typed turn; word-boundary interrupt; `vad`/`ptt`/`muted` |
 | `get_state` | `{session, backend, model, controller, state, mic_mode, tts_engine_active}` |
 
-**Smoke test** (no robot or API key needed, runs against a scripted backend):
+**Smoke test** (no robot or API key needed, runs against a scripted backend — use your
+venv's Python, e.g. `OhBots/Scripts/python.exe` on Windows):
 
 ```bash
-OhBots/Scripts/python.exe tests/test_server_smoke.py                 # controller=virtual
-OhBots/Scripts/python.exe tests/test_server_smoke.py --controller console
+python tests/test_server_smoke.py                 # controller=virtual
+python tests/test_server_smoke.py --controller console
 ```
 
 It spawns its own server, reads config, lists mics/voices/models, starts a session,

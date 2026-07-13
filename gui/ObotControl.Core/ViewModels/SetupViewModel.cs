@@ -17,7 +17,7 @@ public partial class SetupViewModel : ObservableObject
     private readonly EngineApi _api;
     private readonly ConfigStore _store;
     private readonly LogsViewModel _logs;
-    //* Suppresses the auto-persist reaction while we populate fields from config.
+    // Suppresses the auto-persist reaction while we populate fields from config.
     private bool _loading;
 
     public SetupViewModel(EngineApi api, ConfigStore store, LogsViewModel logs, PythonSetupViewModel python)
@@ -107,8 +107,8 @@ public partial class SetupViewModel : ObservableObject
 
     partial void OnSelectedMicChanged(MicDevice? value)
     {
-        //* A microphone is a device setting: persist it immediately (like the console app's
-        //* picker) so the very next session actually uses it — no separate Save step needed.
+        // A microphone is a device setting: persist it immediately (like the console app's
+        // picker) so the very next session actually uses it — no separate Save step needed.
         if (_loading || value is null || !Connected) return;
         _ = SaveAsync();
     }

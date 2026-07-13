@@ -16,7 +16,7 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var shell = new ShellViewModel();
-            //* Marshal engine events + child-process output onto the UI thread.
+            // Marshal engine events + child-process output onto the UI thread.
             shell.UseDispatcher(action => Dispatcher.UIThread.Post(action));
 
             desktop.MainWindow = new MainWindow { DataContext = shell };

@@ -11,8 +11,8 @@ ActionHandler: TypeAlias = Callable[[ObotController], Awaitable[None] | None]
 class ActionRegistry:
     """Maps action tags to robot motion functions. Lookup is case-insensitive."""
 
-    #* Case insensitive lookup matters because the LLM often writes [Nod] (PascalCase)
-    #* while older scripted demos use [nod] (lowercase). Both should resolve.
+    # Case insensitive lookup matters because the LLM often writes [Nod] (PascalCase)
+    # while older scripted demos use [nod] (lowercase). Both should resolve.
 
     def __init__(self) -> None:
         self._handlers: dict[str, ActionHandler] = {}
@@ -62,8 +62,8 @@ def default_action_registry() -> ActionRegistry:
     async def _shake_head(controller: ObotController) -> None:
         await controller.shake_head()
 
-    #* snake_case aliases so existing pipeline code that calls "look_left" still resolves
-    #* to the same handler as the LookLeft tag emitted by the LLM.
+    # snake_case aliases so existing pipeline code that calls "look_left" still resolves
+    # to the same handler as the LookLeft tag emitted by the LLM.
     registry._handlers["look_left"] = registry._handlers["lookleft"]
     registry._handlers["look_right"] = registry._handlers["lookright"]
     registry._handlers["shake_head"] = registry._handlers["shakehead"]

@@ -42,8 +42,8 @@ class MouthSettings:
 class GeminiTTSSettings:
     model: str = "gemini-2.5-flash-preview-tts"
     voice: str = "Kore"          # prebuilt voice name (Kore, Puck, Leda, Charon, ...)
-    #* Optional style instruction prepended to the text, e.g.
-    #* "Say this like an upbeat British news presenter:". Empty = plain reading.
+    # Optional style instruction prepended to the text, e.g.
+    # "Say this like an upbeat British news presenter:". Empty = plain reading.
     style: str = ""
 
     @classmethod
@@ -61,12 +61,12 @@ class PiperTTSSettings:
     """
 
     voice: str = "en_GB-cori-high"
-    #* Explicit path to a .onnx voice model. Empty = ohbotData/piper/<voice>.onnx.
+    # Explicit path to a .onnx voice model. Empty = ohbotData/piper/<voice>.onnx.
     model_path: str = ""
-    #* Download the voice model automatically on first use (one-time, ~60-100 MB).
+    # Download the voice model automatically on first use (one-time, ~60-100 MB).
     auto_download: bool = True
-    #* Load the model in the background at startup so the first sentence doesn't
-    #* pay the ~3s model-load cost.
+    # Load the model in the background at startup so the first sentence doesn't
+    # pay the ~3s model-load cost.
     warm_up: bool = True
     length_scale: float = 1.0
     volume: float = 1.0
@@ -119,7 +119,7 @@ class KokoroTTSSettings:
     voice: str = "bf_emma"
     speed: float = 1.0
     lang: str = "en-us"
-    #* Explicit paths override the auto-downloaded ohbotData/kokoro/ files.
+    # Explicit paths override the auto-downloaded ohbotData/kokoro/ files.
     model_path: str = ""
     voices_path: str = ""
     auto_download: bool = True
@@ -149,9 +149,9 @@ class GTTSSettings:
 
 @dataclass
 class TTSSettings:
-    #* "auto" chains the best available voices, falling through on any failure:
-    #* edge -> kokoro -> piper -> local. Explicit modes pin one engine:
-    #* "edge", "kokoro", "gtts", "gemini", "piper", or "local".
+    # "auto" chains the best available voices, falling through on any failure:
+    # edge -> kokoro -> piper -> local. Explicit modes pin one engine:
+    # "edge", "kokoro", "gtts", "gemini", "piper", or "local".
     engine: str = "auto"
     gemini: GeminiTTSSettings = field(default_factory=GeminiTTSSettings)
     piper: PiperTTSSettings = field(default_factory=PiperTTSSettings)
@@ -159,9 +159,9 @@ class TTSSettings:
     edge: EdgeTTSSettings = field(default_factory=EdgeTTSSettings)
     kokoro: KokoroTTSSettings = field(default_factory=KokoroTTSSettings)
     gtts: GTTSSettings = field(default_factory=GTTSSettings)
-    #* After an engine failure, don't retry it for this long (keeps sentences
-    #* flowing on the next voice instead of paying a timeout per sentence).
-    #* Gemini's free tier is ~3 requests/min, so quota errors land here often.
+    # After an engine failure, don't retry it for this long (keeps sentences
+    # flowing on the next voice instead of paying a timeout per sentence).
+    # Gemini's free tier is ~3 requests/min, so quota errors land here often.
     failure_cooldown_s: float = 90.0
 
     @classmethod
@@ -183,11 +183,11 @@ class TTSSettings:
 class SpeechSettings:
     tts: TTSSettings = field(default_factory=TTSSettings)
     mouth: MouthSettings = field(default_factory=MouthSettings)
-    #* sounddevice output device index; None = system default speakers.
+    # sounddevice output device index; None = system default speakers.
     output_device_index: int | None = None
-    #* When interrupted, playback runs to the end of the current word plus this pad.
+    # When interrupted, playback runs to the end of the current word plus this pad.
     word_stop_pad_s: float = 0.06
-    #* Pacing estimate used when no real audio exists (console controller, TTS failure).
+    # Pacing estimate used when no real audio exists (console controller, TTS failure).
     estimate_wpm: float = 160.0
 
     @classmethod

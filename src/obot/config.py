@@ -10,7 +10,7 @@ from .speech.config import MotionSettings, SpeechSettings
 
 CONFIG_FILENAME = "config.json"
 EXAMPLE_FILENAME = "config.example.json"
-#* Hard cap on how many "recent models" we remember per backend.
+# Hard cap on how many "recent models" we remember per backend.
 RECENTS_CAP = 3
 
 
@@ -26,7 +26,7 @@ class OllamaSSHConfig:
 
 @dataclass
 class AudioConfig:
-    #* Persisted so the mic/STT pickers can offer the last choice as the default.
+    # Persisted so the mic/STT pickers can offer the last choice as the default.
     input_device_index: int | None = None
     stt_engine: str = ""  # "vosk" | "google"
     vosk_model_path: str = ""
@@ -40,8 +40,8 @@ class Config:
     recent_gemini_models: list[str] = field(default_factory=list)
     recent_ollama_models: list[str] = field(default_factory=list)
     ohbot_port: str = "COM7"
-    #* Speech stack (TTS engine choice, voices, mouth animation), servo mixing,
-    #* and ambient behavior tunables. All optional in config.json — defaults apply.
+    # Speech stack (TTS engine choice, voices, mouth animation), servo mixing,
+    # and ambient behavior tunables. All optional in config.json — defaults apply.
     speech: SpeechSettings = field(default_factory=SpeechSettings)
     motion: MotionSettings = field(default_factory=MotionSettings)
     behaviors: BehaviorSettings = field(default_factory=BehaviorSettings)
@@ -121,8 +121,8 @@ class Config:
     def save(self) -> None:
         if self._path is None:
             return
-        #! Atomic write: write to a temp file in the same directory then rename.
-        #! Protects the config from being half written if the process is killed mid save.
+        # Atomic write: write to a temp file in the same directory then rename.
+        # Protects the config from being half written if the process is killed mid save.
         tmp = self._path.with_suffix(self._path.suffix + ".tmp")
         tmp.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
         os.replace(tmp, self._path)
@@ -134,14 +134,14 @@ class Config:
 
 
 def _bump(recents: list[str], model: str) -> list[str]:
-    #* MRU ordering: drop the model if it already appears, then put it at the front.
-    #* The cap keeps the list at three so the quick access menu never grows.
+    # MRU ordering: drop the model if it already appears, then put it at the front.
+    # The cap keeps the list at three so the quick access menu never grows.
     deduped = [m for m in recents if m != model]
     return ([model] + deduped)[:RECENTS_CAP]
 
 
 def _project_root() -> Path:
-    #* config.json lives at the repo root, two levels up from src/obot/config.py.
+    # config.json lives at the repo root, two levels up from src/obot/config.py.
     return Path(__file__).resolve().parents[2]
 
 

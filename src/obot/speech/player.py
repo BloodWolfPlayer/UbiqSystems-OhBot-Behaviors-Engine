@@ -57,7 +57,7 @@ class AudioPlayer:
     def stop_at(self, t_s: float) -> None:
         """Let playback continue until ``t_s`` (clip time), then stop with a fade."""
         with self._lock:
-            #* Never extend an earlier stop request.
+            # Never extend an earlier stop request.
             if self._stop_at_s is None or t_s < self._stop_at_s:
                 self._stop_at_s = max(0.0, t_s)
 
@@ -96,8 +96,8 @@ class AudioPlayer:
                 blocksize=chunk,
             ) as stream:
                 with self._lock:
-                    #* stream.latency = seconds between write() and the speaker cone
-                    #* moving; folding it in keeps the lips from running ahead of audio.
+                    # stream.latency = seconds between write() and the speaker cone
+                    # moving; folding it in keeps the lips from running ahead of audio.
                     self._latency_s = float(stream.latency or 0.0)
 
                 pos = 0
@@ -111,7 +111,7 @@ class AudioPlayer:
                         if pos >= stop_frame:
                             break
                         if end >= stop_frame:
-                            #* Last chunk before the boundary: trim and fade it out.
+                            # Last chunk before the boundary: trim and fade it out.
                             end = min(max(stop_frame, pos + 1), total)
                             block = samples[pos:end].astype(np.float32)
                             ramp = np.ones(len(block), dtype=np.float32)

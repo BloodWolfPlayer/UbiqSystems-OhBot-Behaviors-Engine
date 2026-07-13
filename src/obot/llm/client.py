@@ -9,10 +9,9 @@ from typing import Protocol, runtime_checkable
 class LLMClient(Protocol):
     """The contract every LLM source in this project implements."""
 
-    #* Anything that yields string chunks one at a time qualifies as an LLM client here.
-    #* The orchestrator never imports a concrete class, only this protocol, which lets
-    #* the scripted, Gemini and Ollama clients drop in interchangeably.
-    #? Needed?
+    # Anything that yields string chunks one at a time qualifies as an LLM client here.
+    # The orchestrator never imports a concrete class, only this protocol, which lets
+    # the scripted, Gemini and Ollama clients drop in interchangeably.
     def stream_response(self, prompt: str) -> AsyncIterator[str]: ...
 
     def register_interruption(self, spoken: list[str], unspoken: list[str]) -> None:
@@ -61,5 +60,5 @@ class ScriptedLLMClient:
             yield self.response_text[index : index + self.chunk_size]
 
     def register_interruption(self, spoken: list[str], unspoken: list[str]) -> None:
-        #* Stateless replay source — nothing to remember between turns.
+        # Stateless replay source — nothing to remember between turns.
         del spoken, unspoken

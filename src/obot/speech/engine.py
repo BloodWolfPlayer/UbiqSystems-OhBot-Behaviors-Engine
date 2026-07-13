@@ -60,7 +60,7 @@ class SpeechEngine:
         self._tts = build_tts(settings.tts, gemini_api_key)
         self._player = AudioPlayer(settings.output_device_index)
         self._prefetch: dict[str, asyncio.Task[SpeechClip]] = {}
-        #* At most two synth calls in flight: the sentence about to play and the next.
+        # At most two synth calls in flight: the sentence about to play and the next.
         self._synth_sem = asyncio.Semaphore(2)
         self._stop_requested = False
 
@@ -77,8 +77,8 @@ class SpeechEngine:
         if not key or key in self._prefetch:
             return
         task = asyncio.create_task(self._synthesize(key))
-        #* Retrieve exceptions if the sentence is later dropped by an interrupt,
-        #* so abandoned prefetches never warn "exception was never retrieved".
+        # Retrieve exceptions if the sentence is later dropped by an interrupt,
+        # so abandoned prefetches never warn "exception was never retrieved".
         task.add_done_callback(lambda t: t.cancelled() or t.exception())
         self._prefetch[key] = task
 
@@ -121,7 +121,7 @@ class SpeechEngine:
         clip = await self.synthesize(text)
         mouth_cfg = self.settings.mouth
 
-        #* Char positions -> playback times, kept in written order for equal times.
+        # Char positions -> playback times, kept in written order for equal times.
         timed = sorted(
             ((clip.timeline.time_for_char(m.char_pos), i, m) for i, m in enumerate(markers)),
             key=lambda item: (item[0], item[1]),
@@ -142,8 +142,8 @@ class SpeechEngine:
                     self._player.stop_at(boundary)
                     stop_applied = True
 
-                #* Once the cut is in motion, no further gestures — a nod firing
-                #* during the fade-out would look like the robot ignoring the user.
+                # Once the cut is in motion, no further gestures — a nod firing
+                # during the fade-out would look like the robot ignoring the user.
                 while (
                     not stop_applied
                     and next_marker < len(timed)
@@ -167,15 +167,15 @@ class SpeechEngine:
                 mouth_sink(0.0, 0.0)
 
         if self._player.error is not None:
-            #* Playback broke (usually: no output device). Raise before firing the
-            #* trailing markers — the controller falls back to simulated pacing and
-            #* fires the full marker list there instead.
+            # Playback broke (usually: no output device). Raise before firing the
+            # trailing markers — the controller falls back to simulated pacing and
+            # fires the full marker list there instead.
             if fired:
                 await asyncio.gather(*fired, return_exceptions=True)
             raise self._player.error
 
-        #* Completed normally: markers sitting on the final word / trailing
-        #* punctuation may not have fired inside the loop — fire them now.
+        # Completed normally: markers sitting on the final word / trailing
+        # punctuation may not have fired inside the loop — fire them now.
         if not stop_applied and on_marker is not None:
             for _, _, marker in timed[next_marker:]:
                 fired.append(asyncio.create_task(on_marker(marker)))

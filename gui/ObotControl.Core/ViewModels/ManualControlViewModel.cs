@@ -58,9 +58,9 @@ public partial class EmotionOptionViewModel : ObservableObject
 /// </summary>
 public partial class ManualControlViewModel : ObservableObject
 {
-    //* Jog commands are cheap "hold this position" calls, but a slider drag can fire many
-    //* per second; debounce per-joint so dragging doesn't flood the socket; short enough
-    //* to feel live (close to the mixer's own ~15 Hz joint-stream rate).
+    // Jog commands are cheap "hold this position" calls, but a slider drag can fire many
+    // per second; debounce per-joint so dragging doesn't flood the socket; short enough
+    // to feel live (close to the mixer's own ~15 Hz joint-stream rate).
     private static readonly TimeSpan JogDebounce = TimeSpan.FromMilliseconds(40);
 
     private static readonly (string Name, string Display)[] JointDefs =
@@ -144,14 +144,16 @@ public partial class ManualControlViewModel : ObservableObject
     private async Task EnableManualModeAsync()
     {
         if (!CanEnable) return;
-        //* Snapshot first (while still non-editable, so this doesn't fire jog RPCs), then
-        //* flip the mode on and hold every joint exactly where it already is — no jump.
+        // Snapshot first (while still non-editable, so this doesn't fire jog RPCs), then
+        // flip the mode on and hold every joint exactly where it already is — no jump.
+        // No ConfigureAwait(false) here: continuations must stay on the UI thread
+        // because they touch UI-bound state (same in the other commands below).
         foreach (var joint in Joints) joint.Target = joint.Current;
         ManualModeActive = true;
         try
         {
             foreach (var joint in Joints)
-                await _api.SetJointAsync(joint.Name, joint.Target).ConfigureAwait(false);
+                await _api.SetJointAsync(joint.Name, joint.Target);
             _logs.Append("info", "manual joint control enabled — behaviors overridden until released");
         }
         catch (Exception ex)
@@ -197,7 +199,7 @@ public partial class ManualControlViewModel : ObservableObject
     {
         try
         {
-            var names = await _api.ListEmotionsAsync().ConfigureAwait(false);
+            var names = await _api.ListEmotionsAsync();
             Emotions.Clear();
             foreach (var name in names) Emotions.Add(new EmotionOptionViewModel(name));
             OnActiveEmotionChanged(ActiveEmotion);
@@ -239,13 +241,13 @@ public partial class ManualControlViewModel : ObservableObject
     {
         try
         {
-            await Task.Delay(JogDebounce, ct).ConfigureAwait(false);
+            await Task.Delay(JogDebounce, ct);
             if (ct.IsCancellationRequested) return;
-            await _api.SetJointAsync(joint.Name, joint.Target).ConfigureAwait(false);
+            await _api.SetJointAsync(joint.Name, joint.Target);
         }
         catch (OperationCanceledException)
         {
-            //* Superseded by a newer drag position for the same joint.
+            // Superseded by a newer drag position for the same joint.
         }
         catch (Exception ex)
         {
@@ -266,8 +268,8 @@ public partial class ManualControlViewModel : ObservableObject
         }
         if (evt.Topic == Topics.Emotion)
         {
-            //* Reflects LLM-driven (Emotion) markers too, so this panel's highlighted
-            //* button always matches whatever pose is actually live on the engine.
+            // Reflects LLM-driven (Emotion) markers too, so this panel's highlighted
+            // button always matches whatever pose is actually live on the engine.
             var em = ObotJson.Deserialize<EmotionEvent>(evt.Data);
             if (em is not null && Emotions.Any(e => e.Name == em.Name)) ActiveEmotion = em.Name;
         }

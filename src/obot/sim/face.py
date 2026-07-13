@@ -26,7 +26,7 @@ _MOUTH = "#5a1f24"
 _LIP = "#8a3038"
 _TEXT = "#9fb4c7"
 
-#* Sliders shown in the tuning panel: (attribute, label, from, to, resolution)
+# Sliders shown in the tuning panel: (attribute, label, from, to, resolution)
 _TUNING_FIELDS = [
     ("top_gain", "top lip gain", 0.0, 5.0, 0.1),
     ("bottom_gain", "bottom lip gain", 0.0, 5.0, 0.1),
@@ -67,8 +67,8 @@ class FaceWindow:
         self._ready = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True, name="obot-sim-face")
         self._thread.start()
-        #* Wait briefly so callers can rely on the window existing; if tkinter is
-        #* unavailable the thread sets _closed and we raise.
+        # Wait briefly so callers can rely on the window existing; if tkinter is
+        # unavailable the thread sets _closed and we raise.
         self._ready.wait(timeout=5.0)
         if self._closed.is_set():
             raise RuntimeError("could not open the simulator window (tkinter unavailable?)")
@@ -98,12 +98,12 @@ class FaceWindow:
 
     def _run(self) -> None:
         try:
-            #* All tkinter objects live and die inside _tk_main's frame. The
-            #* explicit collect afterwards runs ON THIS THREAD, so the Tcl
-            #* interpreter (kept alive by the redraw-closure/after-callback cycle)
-            #* is finalised in its home thread. Letting the main thread's exit-GC
-            #* free it instead aborts the process with
-            #* "Tcl_AsyncDelete: async handler deleted by the wrong thread".
+            # All tkinter objects live and die inside _tk_main's frame. The
+            # explicit collect afterwards runs ON THIS THREAD, so the Tcl
+            # interpreter (kept alive by the redraw-closure/after-callback cycle)
+            # is finalised in its home thread. Letting the main thread's exit-GC
+            # free it instead aborts the process with
+            # "Tcl_AsyncDelete: async handler deleted by the wrong thread".
             self._tk_main()
         finally:
             self._closed.set()
@@ -120,10 +120,10 @@ class FaceWindow:
             self._ready.set()
             return
 
-        #* The window lives on this thread. Without this, tkinter stashes the Tk
-        #* instance in a module-level default root, which the *main* thread then
-        #* finalises at interpreter exit — Tcl aborts the whole process with
-        #* "Tcl_AsyncDelete: async handler deleted by the wrong thread".
+        # The window lives on this thread. Without this, tkinter stashes the Tk
+        # instance in a module-level default root, which the *main* thread then
+        # finalises at interpreter exit — Tcl aborts the whole process with
+        # "Tcl_AsyncDelete: async handler deleted by the wrong thread".
         try:
             tk.NoDefaultRoot()
         except Exception:
@@ -160,7 +160,7 @@ class FaceWindow:
             root.mainloop()
         finally:
             self._closed.set()
-            #* Destroy from THIS thread so no live widget outlives the loop.
+            # Destroy from THIS thread so no live widget outlives the loop.
             try:
                 root.destroy()
             except tk.TclError:
@@ -212,8 +212,8 @@ class FaceWindow:
     def _draw(self, canvas, v: dict[int, float], status: str) -> None:
         canvas.delete("all")
 
-        #* Head pose: HEADTURN pans the whole face, HEADNOD pitches it. 10 = head
-        #* up / robot's left; the offsets below are the on-screen interpretation.
+        # Head pose: HEADTURN pans the whole face, HEADNOD pitches it. 10 = head
+        # up / robot's left; the offsets below are the on-screen interpretation.
         cx = 200 + (v[joints.HEADTURN] - 5.0) / 5.0 * 30.0
         cy = 205 - (v[joints.HEADNOD] - 5.0) / 5.0 * 24.0
 
@@ -228,7 +228,7 @@ class FaceWindow:
         eye_r = 32.0
         pupil_dx = -(v[joints.EYETURN] - 5.0) / 5.0 * 14.0
         pupil_dy = -(v[joints.EYETILT] - 5.0) / 5.0 * 10.0
-        #* Lids close from the top; rest (5) and above = fully open.
+        # Lids close from the top; rest (5) and above = fully open.
         lid_frac = max(0.0, min(1.0, (5.0 - v[joints.LIDBLINK]) / 5.0))
 
         for ex in (cx - 50, cx + 50):
@@ -239,11 +239,11 @@ class FaceWindow:
             canvas.create_oval(px - 11, py - 11, px + 11, py + 11, fill=_PUPIL, outline="")
             canvas.create_oval(px - 4, py - 6, px + 1, py - 1, fill="#dfe8ef", outline="")
             if lid_frac >= 0.98:
-                #* Fully shut: paint the whole eye as lid.
+                # Fully shut: paint the whole eye as lid.
                 canvas.create_oval(ex - eye_r, ey - eye_r, ex + eye_r, ey + eye_r,
                                    fill=_LID, outline=_HEAD_EDGE)
             elif lid_frac > 0.01:
-                #* Lid: a cover sliding down over the eye from the top.
+                # Lid: a cover sliding down over the eye from the top.
                 lid_y = ey - eye_r + lid_frac * 2 * eye_r
                 canvas.create_rectangle(ex - eye_r - 1, ey - eye_r - 1, ex + eye_r + 1, lid_y,
                                         fill=_LID, outline="")
@@ -262,8 +262,8 @@ class FaceWindow:
             canvas.create_line(cx - half_w, y_bot - 1, cx + half_w, y_bot - 1,
                                fill=_LIP, width=6, smooth=True)
         else:
-            #* Closed: one line whose slight bend hints at the emotion offsets
-            #* (lips pushed up = smile, pushed down = frown).
+            # Closed: one line whose slight bend hints at the emotion offsets
+            # (lips pushed up = smile, pushed down = frown).
             bend = (v[joints.TOPLIP] + v[joints.BOTTOMLIP]) / 2.0 - 5.0
             mid_y = (y_top + y_bot) / 2.0
             canvas.create_line(

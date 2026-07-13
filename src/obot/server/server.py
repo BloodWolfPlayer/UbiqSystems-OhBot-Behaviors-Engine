@@ -26,7 +26,7 @@ from ..robot import joints
 from ..robot.emotions import EMOTIONS
 from .session import ServerSession
 
-#* Topics forwarded verbatim from the engine's event bus to every connected client.
+# Topics forwarded verbatim from the engine's event bus to every connected client.
 _FORWARDED_TOPICS = (
     events.STATE, events.TRANSCRIPT, events.SPEECH, events.ACTION,
     events.EMOTION, events.JOINTS, events.MICLEVEL, events.LOG, events.ERROR,
@@ -66,8 +66,8 @@ class ControlServer:
     # -- event bridge ------------------------------------------------------------------
 
     def _on_event(self, topic: str, data) -> None:
-        #* Runs on whatever thread emitted (mixer/mic/loop). Hop onto the loop and hand
-        #* the payload to the broadcaster; never touch a websocket from another thread.
+        # Runs on whatever thread emitted (mixer/mic/loop). Hop onto the loop and hand
+        # the payload to the broadcaster; never touch a websocket from another thread.
         loop = self._loop
         if loop is None:
             return
@@ -96,8 +96,8 @@ class ControlServer:
         self._clients.add(websocket)
         try:
             async for raw in websocket:
-                #* Each call runs concurrently so a long test_mic never blocks an
-                #* interrupt arriving on the same connection.
+                # Each call runs concurrently so a long test_mic never blocks an
+                # interrupt arriving on the same connection.
                 task = asyncio.create_task(self._handle_message(websocket, raw))
                 task.add_done_callback(lambda t: t.cancelled() or t.exception())
         except websockets.ConnectionClosed:
@@ -166,8 +166,8 @@ class ControlServer:
         data = params.get("config")
         if not isinstance(data, dict):
             raise ValueError("set_config needs a 'config' object.")
-        #* Validate by parsing, then mutate the live cfg in place so an active session
-        #* hot-applies mouth/motion/behaviors, and persist atomically (engine owns the file).
+        # Validate by parsing, then mutate the live cfg in place so an active session
+        # hot-applies mouth/motion/behaviors, and persist atomically (engine owns the file).
         incoming = Config.from_dict(data)
         _copy_into(self.cfg, incoming)
         if self.cfg._path is None:
@@ -336,8 +336,8 @@ async def serve(host: str = "127.0.0.1", port: int = 8765,
     try:
         cfg = load_config()
     except FileNotFoundError:
-        #* The GUI's whole point is to create/repair config.json, so a missing file is
-        #* not fatal here: start from defaults and let set_config write it.
+        # The GUI's whole point is to create/repair config.json, so a missing file is
+        # not fatal here: start from defaults and let set_config write it.
         cfg = Config.from_dict({}, path=config_path())
         print(f"[serve] no config.json yet — starting from defaults ({config_path()}).")
 

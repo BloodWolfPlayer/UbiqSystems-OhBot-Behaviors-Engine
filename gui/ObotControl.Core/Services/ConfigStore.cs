@@ -19,15 +19,17 @@ public sealed class ConfigStore
     /// <summary>Raised after Current changes (initial load or a save), so pages re-bind.</summary>
     public event EventHandler? Changed;
 
+    // No ConfigureAwait(false) here: Changed handlers repopulate UI-bound
+    // properties, so these continuations must resume on the caller's (UI) thread.
     public async Task LoadAsync()
     {
-        Current = await _api.GetConfigAsync().ConfigureAwait(false);
+        Current = await _api.GetConfigAsync();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task<ObotConfig> SaveAsync(ObotConfig config)
     {
-        Current = await _api.SetConfigAsync(config).ConfigureAwait(false);
+        Current = await _api.SetConfigAsync(config);
         Changed?.Invoke(this, EventArgs.Empty);
         return Current;
     }

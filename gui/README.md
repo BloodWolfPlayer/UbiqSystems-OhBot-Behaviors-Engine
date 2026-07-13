@@ -30,8 +30,10 @@ codebase runs natively on **Windows, Linux and the Raspberry Pi**.
   everything back to automatic control. Needs a running session (any backend/controller).
 - **Logs**: engine stdout + structured log/error events, with level filters.
 
-The **face preview is docked on the right and visible on every page**. It mirrors the
-robot's head, eyes, blinks and its two silver lip plates from the engine's joint stream.
+The **face preview is docked on the right and visible on every page**. It draws the robot
+with a pseudo-3D look — the head yaws and nods with parallax and shading, the eyes are
+glossy spheres under sliding lids, the mouth is two brushed-metal lip plates — all driven
+live from the engine's joint stream, so it moves exactly as the servos would.
 A **? Help** button (and hover tooltips on every control) explains what everything does.
 
 ## Prerequisites

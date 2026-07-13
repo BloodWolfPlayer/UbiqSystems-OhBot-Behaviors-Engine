@@ -14,10 +14,10 @@ TOPLIP = 4
 BOTTOMLIP = 5
 EYETILT = 6
 
-#* Joints the motor mixer manages. HEADROLL (7) exists on Picoh only.
+# Joints the motor mixer manages. HEADROLL (7) exists on Picoh only.
 ALL_JOINTS = (HEADNOD, HEADTURN, EYETURN, LIDBLINK, TOPLIP, BOTTOMLIP, EYETILT)
 
-#* Joints that must snap rather than glide: lips during speech and eyelids for blinks.
+# Joints that must snap rather than glide: lips during speech and eyelids for blinks.
 FAST_JOINTS = frozenset({LIDBLINK, TOPLIP, BOTTOMLIP})
 
 JOINT_NAMES = {

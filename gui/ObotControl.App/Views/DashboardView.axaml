@@ -56,7 +56,7 @@
     <!-- Transcript + input -->
     <Grid Grid.Column="1" RowDefinitions="*,Auto,Auto">
       <Border Grid.Row="0" Background="#0E141B" CornerRadius="8">
-        <ScrollViewer>
+        <ScrollViewer x:Name="TranscriptScroll">
           <ItemsControl ItemsSource="{Binding Transcript}" Margin="10">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:TranscriptItem">

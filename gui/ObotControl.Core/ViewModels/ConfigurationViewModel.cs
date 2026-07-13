@@ -158,7 +158,7 @@ public partial class ConfigurationViewModel : ObservableObject
         {
             await Task.Delay(LiveApplyDebounce, ct).ConfigureAwait(false);
             if (ct.IsCancellationRequested || !Connected) return;
-            await _store.SaveAsync(BuildConfig()).ConfigureAwait(false);
+            await _store.SaveAsync(BuildConfig());
             Status = "mouth tuning applied live";
         }
         catch (OperationCanceledException) { /* superseded by a newer edit */ }

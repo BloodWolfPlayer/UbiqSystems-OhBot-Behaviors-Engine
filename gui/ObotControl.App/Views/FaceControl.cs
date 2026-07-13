@@ -6,16 +6,21 @@ using ObotControl.Core.ViewModels;
 namespace ObotControl.App.Views;
 
 /// <summary>
-/// Draws the OhBot as a recognisable machine from the live <see cref="JointPose"/>.
+/// Draws the OhBot head from the live <see cref="JointPose"/> with a pseudo-3D look.
 ///
-/// * The blue oval <b>base plate</b> stays put; the whole head assembly (head panel, eyes,
-///   lips, neck) rides on a transform so HeadTurn <b>tilts</b> it left/right about the neck
-///   and HeadNod <b>bobs/dips</b> it — the head moves, the plate does not.
-/// * Each eye has a curved blue <b>eyelid</b> clipped to the eyeball, so a blink reads as a
-///   lid sweeping down and any partial value (e.g. a tired half-lid) covers the eye partway.
-/// * The mouth is <b>two independent silver lip plates</b> (TopLip lifts, BottomLip drops)
-///   around a dark cavity, so it's obvious which mechanical part is moving.
-/// Redraws whenever a joints event updates the pose.
+/// * HeadTurn <b>yaws</b> the head: the features shift with parallax, the far side of
+///   the shell foreshortens, and the shading moves — reading as a real turn rather
+///   than a flat slide. HeadNod raises/dips the whole assembly.
+/// * A fixed light from the top-left shades everything: the shell carries a crown
+///   highlight and a turned-away side in shadow, the eyes are glossy spheres with
+///   catchlights, the lip plates are brushed metal.
+/// * Each eye has a shell-blue eyelid clipped to the eyeball, so a blink reads as a
+///   lid sweeping down and a partial value (a tired half-lid) covers the eye partway.
+/// * The mouth stays honest to the hardware: two independent lip plates (TopLip
+///   lifts, BottomLip drops) around a dark cavity.
+///
+/// The base plate never moves; the head, neck and features ride the pose. Redraws
+/// whenever a joints event updates the pose.
 /// </summary>
 public class FaceControl : Control
 {
@@ -28,22 +33,18 @@ public class FaceControl : Control
         set => SetValue(PoseProperty, value);
     }
 
-    private static readonly IBrush HeadFill = new SolidColorBrush(Color.FromRgb(43, 108, 210));
-    private static readonly IBrush HeadInner = new SolidColorBrush(Color.FromRgb(33, 86, 176));
-    private static readonly IBrush LidFill = new SolidColorBrush(Color.FromRgb(58, 120, 220));
-    private static readonly Pen HeadEdge = new(new SolidColorBrush(Color.FromRgb(120, 176, 236)), 2);
-    private static readonly Pen LidCrease = new(new SolidColorBrush(Color.FromRgb(150, 96, 24)), 1);
-    private static readonly IBrush EyeWhite = new SolidColorBrush(Color.FromRgb(243, 233, 206));
-    private static readonly IBrush Iris = new SolidColorBrush(Color.FromRgb(216, 145, 43));
+    // Palette: blue shell, warm amber eyes, brushed-metal mouth.
+    private static readonly Color Shell = Color.FromRgb(43, 108, 210);
+    private static readonly Color ShellInner = Color.FromRgb(33, 86, 176);
+    private static readonly Pen ShellEdge = new(new SolidColorBrush(Color.FromRgb(120, 176, 236)), 2);
+    private static readonly Pen LidCrease = new(new SolidColorBrush(Color.FromArgb(160, 22, 52, 104)), 1);
     private static readonly Pen IrisEdge = new(new SolidColorBrush(Color.FromRgb(150, 96, 24)), 1.5);
     private static readonly IBrush Pupil = new SolidColorBrush(Color.FromRgb(20, 23, 31));
-    private static readonly IBrush Cavity = new SolidColorBrush(Color.FromRgb(10, 12, 16));
-    private static readonly IBrush Silver = new SolidColorBrush(Color.FromRgb(199, 205, 214));
-    private static readonly IBrush SilverHi = new SolidColorBrush(Color.FromRgb(232, 236, 242));
+    private static readonly IBrush CatchLight = new SolidColorBrush(Color.FromArgb(215, 255, 255, 255));
+    private static readonly IBrush GlintLight = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255));
     private static readonly Pen SilverEdge = new(new SolidColorBrush(Color.FromRgb(138, 147, 163)), 1.5);
     private static readonly IBrush Servo = new SolidColorBrush(Color.FromRgb(28, 32, 42));
-    private static readonly IBrush Neck = new SolidColorBrush(Color.FromRgb(36, 42, 54));
-    private static readonly IBrush BaseFill = new SolidColorBrush(Color.FromRgb(30, 78, 158));
+    private static readonly IBrush HeadShadow = new SolidColorBrush(Color.FromArgb(90, 0, 0, 0));
 
     private JointPose? _subscribed;
 
@@ -59,103 +60,216 @@ public class FaceControl : Control
 
     private void OnPoseChanged(object? sender, EventArgs e) => InvalidateVisual();
 
-    private static double D(double pos) => pos - 5.0; // 0..10 with 5 = rest
+    /// <summary>Joint position as a signed delta from rest (positions are 0..10, 5 = rest).</summary>
+    private static double D(double pos) => pos - 5.0;
+
+    /// <summary>Lighten (f &gt; 0) or darken (f &lt; 0) a colour toward white/black.</summary>
+    private static Color Shade(Color c, double f)
+    {
+        double t = Math.Clamp(Math.Abs(f), 0, 1);
+        byte Mix(byte ch, byte target) => (byte)(ch + (target - ch) * t);
+        return f >= 0
+            ? Color.FromRgb(Mix(c.R, 255), Mix(c.G, 255), Mix(c.B, 255))
+            : Color.FromRgb(Mix(c.R, 0), Mix(c.G, 0), Mix(c.B, 0));
+    }
+
+    private static LinearGradientBrush VerticalGradient(params GradientStop[] stops)
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+        };
+        foreach (var stop in stops) brush.GradientStops.Add(stop);
+        return brush;
+    }
+
+    private static LinearGradientBrush HorizontalGradient(params GradientStop[] stops)
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+        };
+        foreach (var stop in stops) brush.GradientStops.Add(stop);
+        return brush;
+    }
 
     public override void Render(DrawingContext ctx)
     {
         var b = Bounds;
-        var bg = new LinearGradientBrush
-        {
-            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-            GradientStops =
-            {
-                new GradientStop(Color.FromRgb(20, 24, 33), 0),
-                new GradientStop(Color.FromRgb(11, 13, 18), 1),
-            },
-        };
-        ctx.FillRectangle(bg, new Rect(0, 0, b.Width, b.Height));
+        DrawBackground(ctx, b);
         if (b.Width < 40 || b.Height < 40) return;
 
         var pose = Pose ?? new JointPose();
         double unit = Math.Min(b.Width, b.Height) * 0.92;
 
-        // Fixed base plate (never moves).
+        // Normalized head orientation, both -1..1.
+        double yaw = Math.Clamp(D(pose.HeadTurn) / 5.0, -1, 1);
+        double pitch = Math.Clamp(D(pose.HeadNod) / 5.0, -1, 1);
+
         double baseCx = b.Width / 2;
         double baseCy = b.Height * 0.90;
         DrawBase(ctx, baseCx, baseCy, unit);
 
-        // The head assembly pivots at the top of the base: HeadTurn tilts it, HeadNod dips it.
-        double pivotY = baseCy - unit * 0.05;
-        double headCy = pivotY - unit * 0.44;
-        double angleRad = D(pose.HeadTurn) * 3.6 * Math.PI / 180.0;
-        double dy = D(pose.HeadNod) * unit * 0.028;   // nod: dip down
-        double dx = D(pose.HeadTurn) * unit * 0.010;  // slight lateral shift with the tilt
+        // The shell shifts a little with the yaw; the features shift more (parallax)
+        // and compress horizontally (foreshortening), which is what sells the turn.
+        double headCx = baseCx + yaw * unit * 0.05;
+        double headCy = baseCy - unit * 0.49 + pitch * unit * -0.03;
+        double headW = unit * 0.62 * (1 - Math.Abs(yaw) * 0.08);
+        double headH = unit * 0.74 * (1 - Math.Abs(pitch) * 0.04);
+        double featureDx = yaw * unit * 0.075;
+        double featureDy = pitch * unit * -0.045;
+        double featureScaleX = 1 - Math.Abs(yaw) * 0.12;
 
-        var m = Matrix.CreateTranslation(-baseCx, -pivotY)
-              * Matrix.CreateRotation(angleRad)
-              * Matrix.CreateTranslation(baseCx + dx, pivotY + dy);
+        // Soft shadow the head casts on the base plate.
+        ctx.DrawEllipse(HeadShadow, null,
+            new Point(headCx, baseCy - unit * 0.075), unit * 0.26, unit * 0.045);
 
-        using (ctx.PushTransform(m))
+        DrawNeck(ctx, headCx, headCy + headH / 2 - unit * 0.04, baseCy, unit);
+        DrawHead(ctx, headCx, headCy, headW, headH, unit, yaw);
+
+        double eyeR = unit * 0.145;
+        double eyeY = headCy - unit * 0.14 + featureDy;
+        double eyeDX = unit * 0.185 * featureScaleX;
+        DrawEye(ctx, headCx + featureDx - eyeDX, eyeY, eyeR, pose, yaw);
+        DrawEye(ctx, headCx + featureDx + eyeDX, eyeY, eyeR, pose, yaw);
+
+        DrawMouth(ctx, headCx + featureDx, headCy + unit * 0.235 + featureDy,
+            unit, featureScaleX, pose);
+    }
+
+    private static void DrawBackground(DrawingContext ctx, Rect b)
+    {
+        var rect = new Rect(0, 0, b.Width, b.Height);
+        ctx.FillRectangle(VerticalGradient(
+            new GradientStop(Color.FromRgb(23, 28, 39), 0),
+            new GradientStop(Color.FromRgb(11, 13, 18), 1)), rect);
+
+        // Faint glow behind the head so the robot doesn't sit in a void.
+        var glow = new RadialGradientBrush
         {
-            // Neck stem connects the head to the (fixed) plate and moves with the head.
-            ctx.DrawRectangle(Neck, null, new Rect(baseCx - unit * 0.05, headCy + unit * 0.30, unit * 0.10, unit * 0.24), 3, 3);
-            DrawHead(ctx, baseCx, headCy, unit);
-
-            double eyeR = unit * 0.145;
-            double eyeY = headCy - unit * 0.14;
-            double eyeDX = unit * 0.185;
-            DrawEye(ctx, baseCx - eyeDX, eyeY, eyeR, pose);
-            DrawEye(ctx, baseCx + eyeDX, eyeY, eyeR, pose);
-
-            DrawLips(ctx, baseCx, headCy + unit * 0.235, unit, pose);
-        }
+            Center = new RelativePoint(0.5, 0.42, RelativeUnit.Relative),
+            GradientOrigin = new RelativePoint(0.5, 0.42, RelativeUnit.Relative),
+        };
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(34, 80, 140, 235), 0));
+        glow.GradientStops.Add(new GradientStop(Color.FromArgb(0, 80, 140, 235), 1));
+        ctx.FillRectangle(glow, rect);
     }
 
     private static void DrawBase(DrawingContext ctx, double cx, double cy, double unit)
     {
-        ctx.DrawEllipse(BaseFill, HeadEdge, new Point(cx, cy), unit * 0.44, unit * 0.10);
-        ctx.DrawRectangle(Servo, null, new Rect(cx - unit * 0.11, cy - unit * 0.12, unit * 0.22, unit * 0.12), 3, 3);
+        ctx.DrawEllipse(VerticalGradient(
+                new GradientStop(Color.FromRgb(45, 100, 190), 0),
+                new GradientStop(Color.FromRgb(20, 50, 98), 1)),
+            ShellEdge, new Point(cx, cy), unit * 0.44, unit * 0.10);
+        ctx.DrawRectangle(Servo, null,
+            new Rect(cx - unit * 0.11, cy - unit * 0.12, unit * 0.22, unit * 0.12), 3, 3);
     }
 
-    private static void DrawHead(DrawingContext ctx, double cx, double cy, double unit)
+    private static void DrawNeck(DrawingContext ctx, double cx, double top, double baseCy, double unit)
     {
-        double w = unit * 0.62, h = unit * 0.74;
-        ctx.DrawRectangle(HeadFill, HeadEdge, new Rect(cx - w / 2, cy - h / 2, w, h), unit * 0.16, unit * 0.16);
-        double iw = w * 0.82, ih = h * 0.84;
-        ctx.DrawRectangle(HeadInner, null, new Rect(cx - iw / 2, cy - ih / 2, iw, ih), unit * 0.12, unit * 0.12);
+        double w = unit * 0.10;
+        double bottom = baseCy - unit * 0.05;
+        ctx.DrawRectangle(HorizontalGradient(
+                new GradientStop(Color.FromRgb(58, 66, 82), 0),
+                new GradientStop(Color.FromRgb(30, 35, 46), 0.55),
+                new GradientStop(Color.FromRgb(20, 24, 32), 1)),
+            null, new Rect(cx - w / 2, top, w, Math.Max(1, bottom - top)), 3, 3);
     }
 
-    private static void DrawEye(DrawingContext ctx, double cx, double cy, double r, JointPose pose)
+    private static void DrawHead(DrawingContext ctx, double cx, double cy,
+        double w, double h, double unit, double yaw)
+    {
+        var headRect = new Rect(cx - w / 2, cy - h / 2, w, h);
+        double cr = unit * 0.16;
+
+        // Directional shading: the side turned away from the fixed top-left light
+        // darkens as the head yaws, the lit side brightens.
+        double lightLeft = 0.16 + 0.10 * yaw;
+        double darkRight = -(0.20 + 0.10 * yaw);
+        ctx.DrawRectangle(HorizontalGradient(
+                new GradientStop(Shade(Shell, lightLeft), 0),
+                new GradientStop(Shell, 0.45),
+                new GradientStop(Shade(Shell, darkRight), 1)),
+            ShellEdge, headRect, cr, cr);
+
+        // Inner face panel, slightly inset and darker.
+        double iw = w * 0.82, ih = h * 0.84;
+        var panelRect = new Rect(cx - iw / 2, cy - ih / 2, iw, ih);
+        ctx.DrawRectangle(HorizontalGradient(
+                new GradientStop(Shade(ShellInner, lightLeft * 0.7), 0),
+                new GradientStop(ShellInner, 0.5),
+                new GradientStop(Shade(ShellInner, darkRight * 0.7), 1)),
+            null, panelRect, unit * 0.12, unit * 0.12);
+
+        // Crown highlight from the overhead light.
+        ctx.DrawRectangle(VerticalGradient(
+                new GradientStop(Color.FromArgb(56, 255, 255, 255), 0),
+                new GradientStop(Color.FromArgb(0, 255, 255, 255), 0.45)),
+            null, headRect, cr, cr);
+    }
+
+    private static void DrawEye(DrawingContext ctx, double cx, double cy, double r,
+        JointPose pose, double yaw)
     {
         var eyeRect = new Rect(cx - r, cy - r, r * 2, r * 2);
-        ctx.DrawEllipse(EyeWhite, null, new Point(cx, cy), r, r);
+        var center = new Point(cx, cy);
 
-        double px = cx + D(pose.EyeTurn) * r * 0.11;
+        // Eyeball: a warm white sphere, lit from the upper left.
+        var ball = new RadialGradientBrush
+        {
+            Center = new RelativePoint(0.42, 0.38, RelativeUnit.Relative),
+            GradientOrigin = new RelativePoint(0.34, 0.28, RelativeUnit.Relative),
+        };
+        ball.GradientStops.Add(new GradientStop(Color.FromRgb(255, 250, 235), 0));
+        ball.GradientStops.Add(new GradientStop(Color.FromRgb(240, 229, 201), 0.6));
+        ball.GradientStops.Add(new GradientStop(Color.FromRgb(190, 178, 148), 1));
+        ctx.DrawEllipse(ball, null, center, r, r);
+
+        // Iris carries the eye servos plus a touch of the head yaw, so the gaze
+        // stays glued to the sphere as the head turns.
+        double px = cx + D(pose.EyeTurn) * r * 0.11 + yaw * r * 0.16;
         double py = cy + D(pose.EyeTilt) * r * 0.11;
-        ctx.DrawEllipse(Iris, IrisEdge, new Point(px, py), r * 0.60, r * 0.60);
-        ctx.DrawEllipse(Pupil, null, new Point(px, py), r * 0.28, r * 0.28);
-        ctx.DrawEllipse(SilverHi, null, new Point(px - r * 0.18, py - r * 0.18), r * 0.09, r * 0.09);
+        var iris = new RadialGradientBrush
+        {
+            Center = new RelativePoint(0.45, 0.42, RelativeUnit.Relative),
+            GradientOrigin = new RelativePoint(0.38, 0.34, RelativeUnit.Relative),
+        };
+        iris.GradientStops.Add(new GradientStop(Color.FromRgb(242, 178, 74), 0));
+        iris.GradientStops.Add(new GradientStop(Color.FromRgb(216, 145, 43), 0.6));
+        iris.GradientStops.Add(new GradientStop(Color.FromRgb(150, 96, 24), 1));
+        ctx.DrawEllipse(iris, IrisEdge, new Point(px, py), r * 0.58, r * 0.58);
+        ctx.DrawEllipse(Pupil, null, new Point(px, py), r * 0.27, r * 0.27);
+        ctx.DrawEllipse(CatchLight, null, new Point(px - r * 0.16, py - r * 0.18), r * 0.09, r * 0.09);
+        ctx.DrawEllipse(GlintLight, null, new Point(px + r * 0.15, py + r * 0.14), r * 0.05, r * 0.05);
 
-        // Eyelid: a blue disc the size of the eye, clipped to the eyeball. LidBlink 5 = open
-        // (disc lifted a full eye-height above), 0 = closed (disc centred over the eye); any
-        // value in between covers the eye partway (e.g. a tired half-lid).
+        // Eyelid: a shell-blue disc clipped to the eyeball. LidBlink 5 = open (disc
+        // lifted a full eye-height above), 0 = closed (disc centred over the eye);
+        // anything between covers the eye partway (a tired half-lid).
         double openness = Math.Clamp(pose.LidBlink / 5.0, 0, 1);
         double lidCy = cy - openness * (2 * r);
         using (ctx.PushGeometryClip(new EllipseGeometry(eyeRect)))
         {
-            ctx.DrawEllipse(LidFill, null, new Point(cx, lidCy), r * 1.04, r);
-            // crease line along the lid's lower rim for definition
+            ctx.DrawEllipse(VerticalGradient(
+                    new GradientStop(Shade(Shell, 0.22), 0),
+                    new GradientStop(Shade(Shell, -0.08), 1)),
+                null, new Point(cx, lidCy), r * 1.04, r);
             ctx.DrawEllipse(null, LidCrease, new Point(cx, lidCy), r * 1.04, r);
+
+            // Ambient occlusion under the brow, so the sphere sits "inside" the head.
+            ctx.DrawEllipse(null, new Pen(new SolidColorBrush(Color.FromArgb(70, 0, 0, 0)), r * 0.14),
+                center, r * 0.96, r * 0.96);
         }
-        ctx.DrawEllipse(null, new Pen(HeadEdge.Brush!, 1.5), new Point(cx, cy), r, r);
+        ctx.DrawEllipse(null, new Pen(ShellEdge.Brush!, 1.5), center, r, r);
     }
 
-    /// <summary>Two separate silver lip plates around a dark cavity: TopLip lifts up,
-    /// BottomLip drops down (deltas above rest), so the two moving parts are unmistakable.</summary>
-    private static void DrawLips(DrawingContext ctx, double cx, double my, double unit, JointPose pose)
+    /// <summary>Two independent brushed-metal lip plates around a dark cavity:
+    /// TopLip lifts up, BottomLip drops down (deltas above rest).</summary>
+    private static void DrawMouth(DrawingContext ctx, double cx, double my,
+        double unit, double scaleX, JointPose pose)
     {
-        double mouthW = unit * 0.40;
+        double mouthW = unit * 0.40 * scaleX;
         double lipH = unit * 0.075;
         double travel = unit * 0.11;
         double restGap = unit * 0.015;
@@ -170,18 +284,24 @@ public class FaceControl : Control
 
         double cavTop = topBottomEdge - lipH * 0.2;
         double cavBot = botTopEdge + lipH * 0.2;
-        ctx.DrawRectangle(Cavity, null, new Rect(cx - mouthW / 2, cavTop, mouthW, Math.Max(1, cavBot - cavTop)), lipH * 0.4, lipH * 0.4);
+        ctx.DrawRectangle(VerticalGradient(
+                new GradientStop(Color.FromRgb(4, 5, 7), 0),
+                new GradientStop(Color.FromRgb(22, 16, 18), 1)),
+            null,
+            new Rect(cx - mouthW / 2, cavTop, mouthW, Math.Max(1, cavBot - cavTop)),
+            lipH * 0.4, lipH * 0.4);
 
-        DrawLipPlate(ctx, cx, topBottomEdge - lipH, mouthW, lipH, top: true);
-        DrawLipPlate(ctx, cx, botTopEdge, mouthW, lipH, top: false);
+        DrawLipPlate(ctx, cx, topBottomEdge - lipH, mouthW, lipH);
+        DrawLipPlate(ctx, cx, botTopEdge, mouthW, lipH);
     }
 
-    private static void DrawLipPlate(DrawingContext ctx, double cx, double y, double w, double h, bool top)
+    private static void DrawLipPlate(DrawingContext ctx, double cx, double y, double w, double h)
     {
         double r = h * 0.5; // pill-shaped plate
-        ctx.DrawRectangle(Silver, SilverEdge, new Rect(cx - w / 2, y, w, h), r, r);
-        double hi = h * 0.28;
-        double hiY = top ? y + h * 0.12 : y + h * 0.6;
-        ctx.DrawRectangle(SilverHi, null, new Rect(cx - w * 0.44, hiY, w * 0.88, hi), hi * 0.5, hi * 0.5);
+        ctx.DrawRectangle(VerticalGradient(
+                new GradientStop(Color.FromRgb(236, 240, 246), 0),
+                new GradientStop(Color.FromRgb(199, 205, 214), 0.5),
+                new GradientStop(Color.FromRgb(158, 166, 180), 1)),
+            SilverEdge, new Rect(cx - w / 2, y, w, h), r, r);
     }
 }

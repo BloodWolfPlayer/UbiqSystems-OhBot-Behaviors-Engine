@@ -27,6 +27,7 @@ import threading
 import time
 import wave
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -85,10 +86,10 @@ class GeminiTTS(TTSEngine):
         import httpx  # lazy so machines without httpx can still run local-only
 
         s = self._settings
-        #* A style prompt ("Say this like a cheery news anchor:") steers delivery and
-        #* pace — Gemini TTS takes direction from the text itself, not from parameters.
-        #* A directive is REQUIRED: with bare conversational text the TTS model
-        #* sometimes tries to *answer* it and the API rejects the call with a 400.
+        # A style prompt ("Say this like a cheery news anchor:") steers delivery and
+        # pace — Gemini TTS takes direction from the text itself, not from parameters.
+        # A directive is REQUIRED: with bare conversational text the TTS model
+        # sometimes tries to *answer* it and the API rejects the call with a 400.
         style = s.style.strip() or "Say:"
         prompt = f"{style} {text}"
         body = {
@@ -108,7 +109,7 @@ class GeminiTTS(TTSEngine):
             raise TTSError(f"Gemini TTS network error: {exc}") from exc
 
         if r.status_code != 200:
-            #* Collapse the JSON error onto one line so a failure is one log line.
+            # Collapse the JSON error onto one line so a failure is one log line.
             detail = " ".join(r.text.split())[:160]
             raise TTSError(f"Gemini TTS returned {r.status_code}: {detail}")
 
@@ -119,7 +120,7 @@ class GeminiTTS(TTSEngine):
         except (KeyError, IndexError, ValueError) as exc:
             raise TTSError(f"Gemini TTS response had no audio: {r.text[:200]}") from exc
 
-        #* mimeType looks like "audio/L16;codec=pcm;rate=24000".
+        # mimeType looks like "audio/L16;codec=pcm;rate=24000".
         rate_match = re.search(r"rate=(\d+)", mime)
         sample_rate = int(rate_match.group(1)) if rate_match else 24_000
         samples = np.frombuffer(pcm, dtype=np.int16)
@@ -139,8 +140,8 @@ class PiperTTS(TTSEngine):
 
     name = "piper"
 
-    #* Default location for downloaded voices, relative to the repo root
-    #* (the app runs from there — the ohbot library itself requires it).
+    # Default location for downloaded voices, relative to the repo root
+    # (the app runs from there — the ohbot library itself requires it).
     VOICES_DIR = Path("ohbotData") / "piper"
 
     def __init__(self, settings: PiperTTSSettings) -> None:
@@ -152,9 +153,9 @@ class PiperTTS(TTSEngine):
             threading.Thread(target=self._warm_up, daemon=True, name="piper-warmup").start()
 
     def _warm_up(self) -> None:
-        #* Pre-load (and if needed download) the voice so the first spoken sentence
-        #* starts instantly. Failures are non-fatal: the first real synthesis will
-        #* retry and raise properly into the fallback chain.
+        # Pre-load (and if needed download) the voice so the first spoken sentence
+        # starts instantly. Failures are non-fatal: the first real synthesis will
+        # retry and raise properly into the fallback chain.
         try:
             with self._lock:
                 self._ensure_voice()
@@ -204,7 +205,7 @@ class PiperTTS(TTSEngine):
                 length_scale=float(s.length_scale), volume=float(s.volume)
             )
         except TypeError:
-            #* Older/newer piper without these knobs: synthesize with defaults.
+            # Older/newer piper without these knobs: synthesize with defaults.
             self._syn_config = None
         return self._voice
 
@@ -269,9 +270,9 @@ class LocalTTS(TTSEngine):
         return await loop.run_in_executor(self._executor, self._synthesize_blocking, text)
 
     def close(self) -> None:
-        #* Drop the COM objects on the worker thread (their home apartment) before
-        #* the executor goes away — releasing them from another thread at
-        #* interpreter shutdown makes SAPI exit uncleanly.
+        # Drop the COM objects on the worker thread (their home apartment) before
+        # the executor goes away — releasing them from another thread at
+        # interpreter shutdown makes SAPI exit uncleanly.
         def _release() -> None:
             self._backend = None
 
@@ -296,7 +297,7 @@ class LocalTTS(TTSEngine):
         except TTSError:
             raise
         except Exception as exc:
-            #* A wedged backend poisons its COM state; drop it so the next call re-inits.
+            # A wedged backend poisons its COM state; drop it so the next call re-inits.
             self._backend = None
             raise TTSError(f"local TTS failed: {exc}") from exc
         finally:
@@ -319,8 +320,8 @@ class _SapiBackend:
         except ImportError as exc:
             raise TTSError("comtypes is not installed (pip install comtypes).") from exc
 
-        #* COM must be initialized on THIS thread (comtypes only auto-inits the
-        #* thread that first imported it, which may have been the main thread).
+        # COM must be initialized on THIS thread (comtypes only auto-inits the
+        # thread that first imported it, which may have been the main thread).
         try:
             comtypes.CoInitialize()
         except OSError:
@@ -328,13 +329,13 @@ class _SapiBackend:
 
         self._voice = CreateObject("SAPI.SpVoice")
         self._create_stream = lambda: CreateObject("SAPI.SpFileStream")
-        #* comtypes generates this module when the first SAPI object is created.
+        # comtypes generates this module when the first SAPI object is created.
         from comtypes.gen import SpeechLib
 
         self._speechlib = SpeechLib
         s = settings
         self._voice.Volume = int(max(0.0, min(1.0, s.volume)) * 100)
-        #* SAPI rate is -10..+10 around ~175 wpm; map the configured wpm onto it.
+        # SAPI rate is -10..+10 around ~175 wpm; map the configured wpm onto it.
         self._voice.Rate = int(max(-10, min(10, round((s.rate_wpm - 175) / 15))))
         if s.voice:
             for v in self._voice.GetVoices():
@@ -507,7 +508,7 @@ class KokoroTTS(TTSEngine):
                 raise TTSError(f"kokoro synthesis failed: {exc}") from exc
         if samples is None or len(samples) == 0:
             raise TTSError("kokoro produced no audio.")
-        #* Kokoro returns float32 in [-1, 1]; convert to int16 PCM for the pipeline.
+        # Kokoro returns float32 in [-1, 1]; convert to int16 PCM for the pipeline.
         pcm = np.clip(np.asarray(samples, dtype=np.float32) * 32767.0, -32768, 32767).astype(np.int16)
         return SynthResult(samples=pcm, sample_rate=int(sample_rate), engine=self.name)
 
@@ -585,8 +586,8 @@ class FallbackTTS(TTSEngine):
                 self._benched_until[engine.name] = time.monotonic() + self._cooldown_s
                 print(f"[tts] {engine.name} failed ({exc}); "
                       f"benched for {int(self._cooldown_s)}s.")
-        #* Everyone is benched or failed: clear the bench and report, so the next
-        #* sentence gets a fresh chance instead of failing forever.
+        # Everyone is benched or failed: clear the bench and report, so the next
+        # sentence gets a fresh chance instead of failing forever.
         self._benched_until.clear()
         raise TTSError("all TTS engines failed: " + " | ".join(errors))
 
@@ -601,10 +602,6 @@ def _module_installed(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 
 
-def _piper_installed() -> bool:
-    return _module_installed("piper")
-
-
 def build_tts(settings: TTSSettings, gemini_api_key: str = "") -> TTSEngine:
     """Assemble the engine (chain) described by config.
 
@@ -614,55 +611,36 @@ def build_tts(settings: TTSSettings, gemini_api_key: str = "") -> TTSEngine:
     voice as a last resort only if the pinned engine isn't available.
     """
     mode = settings.engine.lower().strip() or "auto"
+    if mode not in ("auto", "edge", "kokoro", "gtts", "gemini", "piper", "local"):
+        print(f"[tts] unknown engine '{mode}'; using the auto chain.")
+        mode = "auto"
+
     engines: list[TTSEngine] = []
 
-    def missing(what: str) -> None:
-        print(f"[tts] engine set to '{mode}' but {what}; using the basic local voice.")
+    def add_if_installed(module: str, make: Callable[[], TTSEngine], pip_name: str) -> None:
+        if _module_installed(module):
+            engines.append(make())
+        elif mode != "auto":
+            print(f"[tts] engine set to '{mode}' but {pip_name} is not installed "
+                  f"(pip install {pip_name}); using the basic local voice.")
 
-    if mode == "auto":
-        if _module_installed("edge_tts"):
-            engines.append(EdgeTTS(settings.edge))
-        if _module_installed("kokoro_onnx"):
-            engines.append(KokoroTTS(settings.kokoro))
-        if _piper_installed():
-            engines.append(PiperTTS(settings.piper))
-        # local voice appended by the last-resort block below
-    elif mode == "edge":
-        if _module_installed("edge_tts"):
-            engines.append(EdgeTTS(settings.edge))
-        else:
-            missing("edge-tts is not installed (pip install edge-tts)")
-    elif mode == "kokoro":
-        if _module_installed("kokoro_onnx"):
-            engines.append(KokoroTTS(settings.kokoro))
-        else:
-            missing("kokoro-onnx is not installed (pip install kokoro-onnx)")
-    elif mode == "gtts":
-        if _module_installed("gtts"):
-            engines.append(GTTSEngine(settings.gtts))
-        else:
-            missing("gTTS is not installed (pip install gTTS)")
-    elif mode == "gemini":
+    if mode in ("auto", "edge"):
+        add_if_installed("edge_tts", lambda: EdgeTTS(settings.edge), "edge-tts")
+    if mode in ("auto", "kokoro"):
+        add_if_installed("kokoro_onnx", lambda: KokoroTTS(settings.kokoro), "kokoro-onnx")
+    if mode == "gtts":
+        add_if_installed("gtts", lambda: GTTSEngine(settings.gtts), "gTTS")
+    if mode == "gemini":
         if gemini_api_key:
             engines.append(GeminiTTS(gemini_api_key, settings.gemini))
         else:
-            missing("gemini_api_key is empty")
-    elif mode == "piper":
-        if _piper_installed():
-            engines.append(PiperTTS(settings.piper))
-        else:
-            missing("piper-tts is not installed (pip install piper-tts)")
-    elif mode == "local":
-        pass  # local voice added unconditionally below
-    else:
-        print(f"[tts] unknown engine '{mode}'; using the auto chain.")
-        if _module_installed("edge_tts"):
-            engines.append(EdgeTTS(settings.edge))
-        if _module_installed("kokoro_onnx"):
-            engines.append(KokoroTTS(settings.kokoro))
-        if _piper_installed():
-            engines.append(PiperTTS(settings.piper))
+            print("[tts] engine set to 'gemini' but gemini_api_key is empty; "
+                  "using the basic local voice.")
+    if mode in ("auto", "piper"):
+        add_if_installed("piper", lambda: PiperTTS(settings.piper), "piper-tts")
 
+    # The basic local voice always terminates the auto chain, and stands in
+    # whenever a pinned engine turned out to be unavailable.
     if not engines or mode in ("auto", "local"):
         engines.append(LocalTTS(settings.local))
 

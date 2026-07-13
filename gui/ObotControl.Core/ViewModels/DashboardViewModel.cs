@@ -41,7 +41,7 @@ public partial class DashboardViewModel : ObservableObject
 
     [ObservableProperty] private string _inputText = "";
 
-    //* Push-to-talk hotkey (window-focused). Default Space; configurable via "Set…".
+    // Push-to-talk hotkey (window-focused). Default Space; configurable via "Set…".
     [ObservableProperty] private string _pttKey = "Space";
     [ObservableProperty] private bool _capturingHotkey;
 
@@ -61,8 +61,8 @@ public partial class DashboardViewModel : ObservableObject
     /// Kept in sync live too, via the "emotion" event (see HandleEvent below).</summary>
     [ObservableProperty] private string _emotion = "Neutral";
 
-    //* Live "as you talk" line: the interim transcript while the user is still speaking.
-    //* Empty/null hides it; committed on the final transcript event.
+    // Live "as you talk" line: the interim transcript while the user is still speaking.
+    // Empty/null hides it; committed on the final transcript event.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPendingUser))]
     private string? _pendingUserText;
@@ -248,12 +248,12 @@ public partial class DashboardViewModel : ObservableObject
         if (t is null) return;
         if (t.Partial)
         {
-            //* Interim: show a live line ("listening…" until words arrive from streaming STT).
+            // Interim: show a live line ("listening…" until words arrive from streaming STT).
             PendingUserText = string.IsNullOrEmpty(t.Text) ? "🎤 listening…" : t.Text;
         }
         else
         {
-            //* Final: commit a real utterance; an empty final just clears the live line.
+            // Final: commit a real utterance; an empty final just clears the live line.
             if (!string.IsNullOrWhiteSpace(t.Text))
             {
                 Transcript.Add(new TranscriptItem { Kind = TranscriptKind.User, Text = t.Text });

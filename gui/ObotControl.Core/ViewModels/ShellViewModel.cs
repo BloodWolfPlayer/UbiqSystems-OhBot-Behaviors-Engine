@@ -59,12 +59,12 @@ public partial class ShellViewModel : ObservableObject
         Client.EngineEventReceived += (_, e) => RouteEvent(e);
         Dashboard.PropertyChanged += (_, e) =>
         {
-            //* The dashboard owns session_start/session_stop; mirror its result so the
-            //* manual-control panel knows whether set_joint/release_joint will succeed.
+            // The dashboard owns session_start/session_stop; mirror its result so the
+            // manual-control panel knows whether set_joint/release_joint will succeed.
             if (e.PropertyName == nameof(DashboardViewModel.SessionActive))
                 ManualControl.NotifySessionActive(Dashboard.SessionActive);
-            //* Mirrors get_state/session_start/session_stop's "emotion" field, so a fresh
-            //* session (or a reconnect to one already running) shows the real active pose.
+            // Mirrors get_state/session_start/session_stop's "emotion" field, so a fresh
+            // session (or a reconnect to one already running) shows the real active pose.
             else if (e.PropertyName == nameof(DashboardViewModel.Emotion))
                 ManualControl.SyncEmotion(Dashboard.Emotion);
         };
@@ -72,8 +72,8 @@ public partial class ShellViewModel : ObservableObject
         {
             if (e.PropertyName != nameof(PythonSetupViewModel.IsReady)) return;
             LaunchEngineCommand.NotifyCanExecuteChanged();
-            //* First run / nothing usable yet: land directly on the Setup tab instead of
-            //* leaving the user stuck on a Dashboard whose Launch button is disabled.
+            // First run / nothing usable yet: land directly on the Setup tab instead of
+            // leaving the user stuck on a Dashboard whose Launch button is disabled.
             if (!Setup.Python.IsReady && SelectedTab == 0) SelectedTab = 1;
         };
 
@@ -119,9 +119,9 @@ public partial class ShellViewModel : ObservableObject
         engine.Exited += (_, code) => _post(() =>
         {
             EngineOwned = false;
-            //* A nonzero exit here usually just means some other engine (e.g. one left
-            //* running from an earlier session) already owns this port — the connect
-            //* retry above will attach to that one instead, so this isn't a real failure.
+            // A nonzero exit here usually just means some other engine (e.g. one left
+            // running from an earlier session) already owns this port — the connect
+            // retry above will attach to that one instead, so this isn't a real failure.
             if (engine.ObservedAddressInUse)
             {
                 Logs.Append("warn",
@@ -138,7 +138,7 @@ public partial class ShellViewModel : ObservableObject
             _engine = engine;
             EngineOwned = true;
             Logs.Append("info", $"launched engine ({LaunchController}); connecting…");
-            //* Auto-reconnect keeps retrying until the server's socket is up.
+            // Auto-reconnect keeps retrying until the server's socket is up.
             Client.Connect(new Uri($"ws://{Host}:{Port}"));
         }
         catch (Exception ex)

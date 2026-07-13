@@ -29,11 +29,11 @@ from ..robot.controller import (
 )
 from ..core.orchestrator import RobotPipeline
 
-#* repo root is four levels up: server/session.py -> server -> obot -> src -> root
+# repo root is four levels up: server/session.py -> server -> obot -> src -> root
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 SYSTEM_PROMPT_FILE = _REPO_ROOT / "system_prompt.txt"
 
-#* Sentinel pushed onto the turn queue to unblock and end the worker on stop().
+# Sentinel pushed onto the turn queue to unblock and end the worker on stop().
 _STOP = object()
 
 VALID_CONTROLLERS = ("virtual", "sim", "hardware", "console")
@@ -44,8 +44,8 @@ VALID_MIC_MODES = ("vad", "ptt", "muted")
 def _read_system_prompt() -> str:
     if SYSTEM_PROMPT_FILE.exists():
         return SYSTEM_PROMPT_FILE.read_text(encoding="utf-8")
-    #* The persona file is optional for the server; a terse default keeps gemini/ollama
-    #* usable even on a bare checkout without system_prompt.txt.
+    # The persona file is optional for the server; a terse default keeps gemini/ollama
+    # usable even on a bare checkout without system_prompt.txt.
     return "You are Ms. Mimic, a friendly robot. Keep replies short and spoken-friendly."
 
 
@@ -122,7 +122,7 @@ class ServerSession:
         self._behaviors = BehaviorManager(self._controller, self._cfg.behaviors)
         self._behaviors.start()
 
-        #* Watch speech events to keep the "active TTS engine" badge current for get_state.
+        # Watch speech events to keep the "active TTS engine" badge current for get_state.
         self._unsub_speech = events.subscribe(events.SPEECH, self._on_speech_event)
 
         self._setup_audio()  # best-effort; mic stays muted until set_mic_mode opens it
@@ -139,7 +139,7 @@ class ServerSession:
             return {"session": False}
         self._running = False
 
-        #* Cut any in-flight speech and unblock the worker.
+        # Cut any in-flight speech and unblock the worker.
         if self._interrupt is not None:
             self._interrupt.trigger("keyboard")
         if self._controller is not None:
@@ -157,7 +157,7 @@ class ServerSession:
                 self._audio.stop()
             self._audio = None
 
-        #* Drop any turns still queued so stop() doesn't voice a backlog on the way out.
+        # Drop any turns still queued so stop() doesn't voice a backlog on the way out.
         while not self._turn_queue.empty():
             with contextlib.suppress(asyncio.QueueEmpty):
                 self._turn_queue.get_nowait()
@@ -203,8 +203,8 @@ class ServerSession:
                 motion_settings=cfg.motion, gemini_api_key=cfg.gemini_api_key,
             )
         if kind == "sim":
-            #* Opens the tkinter face window on the engine host (self-threaded). If that
-            #* fails (no display), fall back to the headless virtual controller.
+            # Opens the tkinter face window on the engine host (self-threaded). If that
+            # fails (no display), fall back to the headless virtual controller.
             try:
                 from ..robot.controller import SimulatedObotController
                 from ..sim.face import FaceWindow
@@ -237,7 +237,7 @@ class ServerSession:
 
             if not model:
                 raise ValueError("the ollama backend needs a model (call list_ollama_models).")
-            #* Keep the tunnel open for the session's lifetime (closed in stop()).
+            # Keep the tunnel open for the session's lifetime (closed in stop()).
             self._tunnel_cm = open_ollama_tunnel(self._cfg.ollama_ssh)
             bound_port = self._tunnel_cm.__enter__()
             base_url = f"http://127.0.0.1:{bound_port}"
@@ -302,7 +302,7 @@ class ServerSession:
         if self._behaviors is not None:
             self._behaviors.set_listening(True)
         self._loop.call_soon_threadsafe(self._set_listening, True)
-        #* Show the GUI a live "listening…" line the moment the user starts talking.
+        # Show the GUI a live "listening…" line the moment the user starts talking.
         events.emit(events.TRANSCRIPT, {"role": "user", "text": "", "partial": True})
 
     def _on_speech_end(self) -> None:
@@ -321,7 +321,7 @@ class ServerSession:
 
     def interrupt(self) -> None:
         if self._interrupt is not None:
-            #* Same path as SPACE / voice barge-in: stop at the next word boundary.
+            # Same path as SPACE / voice barge-in: stop at the next word boundary.
             self._interrupt.trigger("keyboard")
 
     def set_mic_mode(self, mode: str) -> None:
@@ -334,15 +334,15 @@ class ServerSession:
                 events.emit(events.LOG, {"level": "warn",
                                          "message": "no microphone available; mic mode ignored."})
             return
-        #* Open the device lazily: the capture thread (and its ambient-noise calibration)
-        #* only starts the first time the mic is actually un-muted.
+        # Open the device lazily: the capture thread (and its ambient-noise calibration)
+        # only starts the first time the mic is actually un-muted.
         if mode != "muted" and not self._mic_started:
             self._audio.start()
             self._mic_started = True
             self._mic_consumer = asyncio.create_task(self._mic_consumer_loop())
         self._audio.set_mode(mode)
-        #* PTT parks the mic until the user presses the talk button / hotkey (trigger_ptt);
-        #* VAD listens continuously. We do not auto-arm a capture on the mode switch itself.
+        # PTT parks the mic until the user presses the talk button / hotkey (trigger_ptt);
+        # VAD listens continuously. We do not auto-arm a capture on the mode switch itself.
 
     def trigger_ptt(self) -> None:
         """Arm one push-to-talk capture (from the GUI talk button or hotkey)."""
@@ -376,8 +376,8 @@ class ServerSession:
         assert self._audio is not None
         while True:
             text = (await self._audio.next_utterance()).strip()
-            #* Commit the final transcript (empty clears the GUI's live "listening…" line);
-            #* only a real utterance becomes a conversation turn.
+            # Commit the final transcript (empty clears the GUI's live "listening…" line);
+            # only a real utterance becomes a conversation turn.
             events.emit(events.TRANSCRIPT, {"role": "user", "text": text, "partial": False})
             if text:
                 await self._turn_queue.put(text)
@@ -436,7 +436,7 @@ class ServerSession:
         events.emit(events.TRANSCRIPT, {"role": "user", "text": text, "partial": False})
 
     def _emit_partial(self, text: str) -> None:
-        #* Called from the mic capture thread with interim words (Vosk streaming).
+        # Called from the mic capture thread with interim words (Vosk streaming).
         events.emit(events.TRANSCRIPT, {"role": "user", "text": text, "partial": True})
 
     def state(self) -> dict:
