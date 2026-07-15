@@ -159,6 +159,60 @@ python -m obot --console
 
 ---
 
+## Command-line flags
+
+Three entry points, each runnable with `python -m <module> --help`.
+
+### `python -m obot` — the full chat pipeline
+
+```bash
+python -m obot [--text "..."] [--chunk-size N] [--console] [--sim]
+```
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--text "..."` | — | Skip the interactive backend picker and voice session entirely: run the scripted demo once with this exact text, then exit. No API key, config.json, or microphone needed. |
+| `--chunk-size N` | `24` | Characters per chunk fed to the `StreamProcessor` by the scripted LLM source (only relevant with `--text`) — smaller values exercise streaming/token-boundary edge cases harder. |
+| `--console` | off | Force `ConsoleObotController`: prints what the robot *would* do, needs no `ohbot` library, servos, or audio device. |
+| `--sim` | off | Use the digital OhBot (simulator window) instead of real hardware. See [Running without the robot](#running-without-the-robot). |
+
+With no flags, `python -m obot` prompts for a backend (Gemini / remote Ollama / scripted demo / example script) and starts the full voice session — see [Session controls](#session-controls) and [Microphone input](#microphone-input).
+
+### `python -m obot.sim` — standalone speech/motion test bench
+
+```bash
+python -m obot.sim [--text "..."] [--no-tuning]
+```
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--text "..."` | — | Speak this once at startup (tags like `[Nod]`/`(Happy)`/`!Delay500` work), then drop into the interactive prompt. |
+| `--no-tuning` | off | Hide the mouth-tuning sliders and "Save to config.json" button in the simulator window. |
+
+No LLM backend involved — type sentences directly at the prompt. See [Running without the robot](#running-without-the-robot).
+
+### `python -m obot.ml` — AI gesture model runner
+
+Drives the Ohbot straight from the BEAT2-trained audio model, independent of the chat pipeline. See [mlBehaviour/README.md](mlBehaviour/README.md) for the training side.
+
+```bash
+python -m obot.ml <checkpoint> <wav> [--control-hz HZ] [--device cpu|cuda] [--intensity N] [--console] [--sim]
+```
+
+| Flag | Default | What it does |
+|---|---|---|
+| `checkpoint` (positional) | — | Path to a `train.py` checkpoint, e.g. `mlBehaviour/training_run/best_model.pt`. |
+| `wav` (positional) | — | Audio file to play and gesture along to. |
+| `--control-hz` | `20.0` | Must match the `--control-hz` the checkpoint was trained with (`beat2_to_ohbot.py`). |
+| `--device` | `cpu` | torch device for inference: `cpu` or `cuda`. |
+| `--intensity` | `1.0` | Scales predicted movement around rest position: `>1` exaggerates the gestures, `<1` dampens them. Same knob as `config.json → speech.gesture.intensity` (used when the AI model drives the live chat pipeline instead of a standalone wav). |
+| `--console` | off | Force the hardware-free console controller. |
+| `--sim` | off | Use the digital OhBot simulator window. |
+
+Needs `pip install -r requirements/ml.txt` (adds torch/scipy/soundfile on top of the base app) — not required unless you're using this or training in `mlBehaviour/`.
+
+---
+
 ## Microphone input
 
 For the Gemini and Ollama backends you talk to the bot with the host machine's microphone. Capture uses [sounddevice](https://python-sounddevice.readthedocs.io/), which is a cross-platform PortAudio wrapper that installs without a C compiler on Windows.
