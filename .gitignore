@@ -222,3 +222,6 @@ __marimo__/
 # Local config containing API keys and SSH credentials
 config.json
 /ohbotData
+
+# taining data
+ohbot_data
