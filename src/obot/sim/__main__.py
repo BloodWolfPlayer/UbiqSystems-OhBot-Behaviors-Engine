@@ -71,7 +71,7 @@ async def _run(text: str | None, tuning: bool) -> None:
     lines: asyncio.Queue[str | None] = asyncio.Queue()
 
     def reader() -> None:
-        #* Plain blocking stdin reader; daemon thread so it never blocks shutdown.
+        # Plain blocking stdin reader; daemon thread so it never blocks shutdown.
         while True:
             try:
                 line = input()
@@ -84,7 +84,7 @@ async def _run(text: str | None, tuning: bool) -> None:
     print(_BANNER)
 
     async def next_line(timeout: float) -> str | None | object:
-        #* Returns the line, None (EOF), or _PENDING when nothing arrived in time.
+        # Returns the line, None (EOF), or _PENDING when nothing arrived in time.
         try:
             return await asyncio.wait_for(lines.get(), timeout)
         except asyncio.TimeoutError:
@@ -129,7 +129,7 @@ async def _run(text: str | None, tuning: bool) -> None:
                         await run_task
                     manager.set_speaking(False)
                     return
-                #* Any line while speaking = interrupt; non-empty also queues as next input.
+                # Any line while speaking = interrupt; non-empty also queues as next input.
                 interrupt.trigger("keyboard")
                 nxt = str(got).strip()
                 if nxt:

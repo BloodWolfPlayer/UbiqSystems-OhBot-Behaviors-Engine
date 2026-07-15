@@ -1,0 +1,75 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:ObotControl.Core.ViewModels;assembly=ObotControl.Core"
+             xmlns:core="clr-namespace:ObotControl.Core;assembly=ObotControl.Core"
+             xmlns:views="clr-namespace:ObotControl.App.Views"
+             x:Class="ObotControl.App.Views.ManualControlView"
+             x:Name="Root"
+             x:DataType="vm:ManualControlViewModel" x:CompileBindings="True">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="10" Spacing="14" MaxWidth="820" HorizontalAlignment="Left">
+
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Button Content="Enable manual control" Command="{Binding EnableManualModeCommand}"
+                IsEnabled="{Binding CanEnable}" Background="#2F6FD6" Foreground="White"
+                ToolTip.Tip="{x:Static core:HelpText.EnableManualControl}"/>
+        <Button Content="Release (back to auto)" Command="{Binding DisableManualModeCommand}"
+                IsEnabled="{Binding ManualModeActive}" Background="#B4442E" Foreground="White"
+                ToolTip.Tip="{x:Static core:HelpText.ReleaseManualControl}"/>
+        <Button Content="Center all" Command="{Binding CenterAllCommand}" IsEnabled="{Binding CanEdit}"
+                ToolTip.Tip="{x:Static core:HelpText.CenterAllJoints}"/>
+        <TextBlock Text="no active session — start one on the Dashboard first" Foreground="#E0A040"
+                   VerticalAlignment="Center" IsVisible="{Binding !SessionActive}"/>
+      </StackPanel>
+
+      <Border Background="#141A22" CornerRadius="8" Padding="12" ToolTip.Tip="{x:Static core:HelpText.EmotionsPanel}">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Emotions" FontWeight="Bold" FontSize="15"/>
+          <TextBlock Text="Activates that emotion's default mouth/eyes/nod pose — the same one the LLM's (Emotion) tags use — until you pick another." Foreground="#9FB2C8" TextWrapping="Wrap"/>
+          <ItemsControl ItemsSource="{Binding Emotions}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal"/>
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:EmotionOptionViewModel">
+                <Button Content="{Binding Name}" Margin="0,0,8,8" Padding="14,6"
+                        Command="{Binding $parent[UserControl].((vm:ManualControlViewModel)DataContext).SetEmotionCommand}"
+                        CommandParameter="{Binding Name}"
+                        IsEnabled="{Binding $parent[UserControl].((vm:ManualControlViewModel)DataContext).CanSetEmotion}"
+                        Background="{Binding IsActive, Converter={x:Static views:Converters.BoolToAccent}}"
+                        Foreground="White"/>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <Border Background="#141A22" CornerRadius="8" Padding="12" ToolTip.Tip="{x:Static core:HelpText.ManualControlPanel}">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Motors" FontWeight="Bold" FontSize="15"/>
+          <ItemsControl ItemsSource="{Binding Joints}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ManualJointViewModel">
+                <Border Background="#0E141B" CornerRadius="6" Padding="10" Margin="0,4">
+                  <Grid ColumnDefinitions="120,70,*,70,80">
+                    <TextBlock Grid.Column="0" Text="{Binding DisplayName}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="1" Text="{Binding Current, StringFormat='now {0:0.00}'}"
+                               VerticalAlignment="Center" Foreground="#9FB2C8"/>
+                    <Slider Grid.Column="2" Minimum="0" Maximum="10" TickFrequency="0.1"
+                            Value="{Binding Target}" IsEnabled="{Binding Editable}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="3" Text="{Binding Target, StringFormat='{}{0:0.00}'}" VerticalAlignment="Center"/>
+                    <Button Grid.Column="4" Content="Center" HorizontalAlignment="Stretch"
+                            Command="{Binding $parent[UserControl].((vm:ManualControlViewModel)DataContext).ResetJointCommand}"
+                            CommandParameter="{Binding}" IsEnabled="{Binding Editable}"/>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

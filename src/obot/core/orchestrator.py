@@ -12,9 +12,9 @@ from .processor import StreamProcessor
 
 
 def _parse_specs(raw: str) -> list[tuple[str, int]]:
-    #* Metadata format from the processor: "name@pos,name@pos,..."
-    #* The integer pos is the character index inside the sentence where the marker appeared,
-    #* used later to schedule the action or emotion at the matching point during speech.
+    # Metadata format from the processor: "name@pos,name@pos,..."
+    # The integer pos is the character index inside the sentence where the marker appeared,
+    # used later to schedule the action or emotion at the matching point during speech.
     specs: list[tuple[str, int]] = []
     for spec in raw.split(","):
         if not spec:
@@ -81,8 +81,8 @@ class RobotPipeline:
             watcher = asyncio.create_task(self._interrupt_watcher(interrupt))
 
         try:
-            #* Await the producer first: it always finishes the stream (even after an
-            #* interrupt) and posts the sentinel, so the consumer can then drain and exit.
+            # Await the producer first: it always finishes the stream (even after an
+            # interrupt) and posts the sentinel, so the consumer can then drain and exit.
             await producer
             await consumer
         finally:
@@ -90,13 +90,13 @@ class RobotPipeline:
                 watcher.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await watcher
-            #* Free audio prefetched for sentences that were dropped by an interrupt.
+            # Free audio prefetched for sentences that were dropped by an interrupt.
             self.controller.turn_finished()
 
         interrupted = interrupt is not None and interrupt.is_set()
         unspoken = generated[len(spoken):] if interrupted else []
         if interrupted:
-            #* Optional protocol method — Gemini/Ollama implement it, Scripted no-ops.
+            # Optional protocol method — Gemini/Ollama implement it, Scripted no-ops.
             register = getattr(self.llm_client, "register_interruption", None)
             if callable(register):
                 register(spoken, unspoken)
@@ -114,8 +114,8 @@ class RobotPipeline:
                 for event in self.processor.feed(chunk):
                     if event.kind == "sentence":
                         generated.append(event.payload)
-                        #* Prefetch: start synthesizing this sentence's audio now, so
-                        #* it's ready the moment the speech loop reaches it.
+                        # Prefetch: start synthesizing this sentence's audio now, so
+                        # it's ready the moment the speech loop reaches it.
                         self.controller.prepare_sentence(event.payload)
                         await speech_queue.put(event)
 
@@ -125,14 +125,14 @@ class RobotPipeline:
                     self.controller.prepare_sentence(event.payload)
                     await speech_queue.put(event)
         finally:
-            #* Sentinel: always posted so the consumer cannot hang, even if streaming
-            #* raised partway through.
+            # Sentinel: always posted so the consumer cannot hang, even if streaming
+            # raised partway through.
             await speech_queue.put(None)
 
     async def _interrupt_watcher(self, interrupt: InterruptController) -> None:
-        #* Fires stop_speaking the instant the interrupt trips, instead of waiting for the
-        #* consumer to reach its next-sentence check. The speech engine then stops at the
-        #* end of the word currently being voiced.
+        # Fires stop_speaking the instant the interrupt trips, instead of waiting for the
+        # consumer to reach its next-sentence check. The speech engine then stops at the
+        # end of the word currently being voiced.
         await interrupt.wait()
         await self.controller.stop_speaking()
 
@@ -149,8 +149,8 @@ class RobotPipeline:
             if event.kind != "sentence":
                 continue
             if interrupt is not None and interrupt.is_set():
-                #* Interrupted: drop this and every later sentence, but keep consuming so
-                #* the producer's sentinel is reached and the turn can finish cleanly.
+                # Interrupted: drop this and every later sentence, but keep consuming so
+                # the producer's sentinel is reached and the turn can finish cleanly.
                 continue
 
             spoken.append(event.payload)
@@ -163,8 +163,8 @@ class RobotPipeline:
         emotion_specs = _parse_specs(metadata.get("emotions", ""))
         delay_specs = _parse_specs(metadata.get("delays", ""))
 
-        #* Emotions placed at the very start of a sentence are applied before speech
-        #* starts, so the face is already in the right shape for the first word.
+        # Emotions placed at the very start of a sentence are applied before speech
+        # starts, so the face is already in the right shape for the first word.
         pre_emotions = [name for name, pos in emotion_specs if pos == 0]
         for name in pre_emotions:
             await self.controller.set_emotion(name)
@@ -184,13 +184,13 @@ class RobotPipeline:
             else:
                 await self.controller.set_emotion(marker.name)
 
-        #* The controller times the markers: against the real word timeline when it
-        #* has audio, or a duration estimate when it does not (console mode).
+        # The controller times the markers: against the real word timeline when it
+        # has audio, or a duration estimate when it does not (console mode).
         await self.controller.speak_sentence(sentence, markers, on_marker)
 
-        #! A spoken sentence cannot be paused mid utterance once it is handed to TTS,
-        #! so any !DelayX inside a sentence is treated as a pause AFTER that sentence,
-        #! before the next one begins. Multiple delays on one sentence are summed.
+        # A spoken sentence cannot be paused mid utterance once it is handed to TTS,
+        # so any !DelayX inside a sentence is treated as a pause AFTER that sentence,
+        # before the next one begins. Multiple delays on one sentence are summed.
         total_pause_ms = sum(int(ms) for ms, _ in delay_specs if ms.isdigit())
         if total_pause_ms:
             await asyncio.sleep(total_pause_ms / 1000)

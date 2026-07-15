@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:ObotControl.Core.ViewModels;assembly=ObotControl.Core"
+             x:Class="ObotControl.App.Views.LogsView"
+             x:DataType="vm:LogsViewModel" x:CompileBindings="True">
+  <Grid RowDefinitions="Auto,*" Margin="6">
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12">
+      <CheckBox Content="Info" IsChecked="{Binding ShowInfo}"/>
+      <CheckBox Content="Warnings" IsChecked="{Binding ShowWarnings}"/>
+      <CheckBox Content="Errors" IsChecked="{Binding ShowErrors}"/>
+      <Button Content="Clear" Command="{Binding ClearCommand}"/>
+    </StackPanel>
+    <Border Grid.Row="1" Background="#0B0F14" CornerRadius="6">
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Lines}" Margin="8">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:LogLine">
+              <TextBlock Text="{Binding Display}" FontFamily="Cascadia Code,Consolas,monospace"
+                         FontSize="12" TextWrapping="Wrap"/>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</UserControl>

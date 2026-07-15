@@ -15,8 +15,8 @@ class GeminiAPIError(RuntimeError):
 
 
 async def list_gemini_models(api_key: str) -> list[str]:
-    #* Fetched live from the API so the model list always matches what the key can actually use.
-    #* Filters out models that do not support content generation (e.g. embedding only models).
+    # Fetched live from the API so the model list always matches what the key can actually use.
+    # Filters out models that do not support content generation (e.g. embedding only models).
     if not api_key:
         raise GeminiAPIError("gemini_api_key is empty, fill it in config.json.")
 
@@ -49,12 +49,12 @@ class GeminiLLMClient:
         self.api_key = api_key
         self.model = model
         self.system_prompt = system_prompt
-        #* Multi turn history. Each call appends the new user turn and, after streaming
-        #* completes, the assembled assistant turn, so the next prompt sees prior context.
+        # Multi turn history. Each call appends the new user turn and, after streaming
+        # completes, the assembled assistant turn, so the next prompt sees prior context.
         self._contents: list[dict] = []
-        #* If the previous turn was interrupted, this note is folded into the *next* user
-        #* turn (rather than added as its own turn) so the user/model roles keep
-        #* alternating, which the Gemini API requires.
+        # If the previous turn was interrupted, this note is folded into the *next* user
+        # turn (rather than added as its own turn) so the user/model roles keep
+        # alternating, which the Gemini API requires.
         self._pending_note: str | None = None
 
     async def __aenter__(self) -> "GeminiLLMClient":
@@ -90,8 +90,8 @@ class GeminiLLMClient:
                                 f"Gemini stream returned {response.status_code}: {text[:200]}"
                             )
 
-                        #* Gemini streams Server Sent Events. Each meaningful line starts with "data:"
-                        #* followed by a JSON payload. Comments and blank keepalive lines are ignored.
+                        # Gemini streams Server Sent Events. Each meaningful line starts with "data:"
+                        # followed by a JSON payload. Comments and blank keepalive lines are ignored.
                         async for line in response.aiter_lines():
                             if not line or not line.startswith("data:"):
                                 continue
@@ -112,8 +112,8 @@ class GeminiLLMClient:
                 except httpx.HTTPError as exc:
                     raise GeminiAPIError(f"network error while streaming: {exc}") from exc
         finally:
-            #* Persist whatever was generated — even if the stream was closed early by an
-            #* interrupt or errored partway — so history reflects what the model actually
-            #* produced this turn.
+            # Persist whatever was generated — even if the stream was closed early by an
+            # interrupt or errored partway — so history reflects what the model actually
+            # produced this turn.
             if collected:
                 self._contents.append({"role": "model", "parts": [{"text": "".join(collected)}]})

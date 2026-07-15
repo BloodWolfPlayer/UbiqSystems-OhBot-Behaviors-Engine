@@ -1,0 +1,115 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:ObotControl.Core.ViewModels;assembly=ObotControl.Core"
+        xmlns:core="clr-namespace:ObotControl.Core;assembly=ObotControl.Core"
+        xmlns:views="clr-namespace:ObotControl.App.Views"
+        x:Class="ObotControl.App.MainWindow"
+        x:DataType="vm:ShellViewModel"
+        Width="1180" Height="760" MinWidth="900" MinHeight="580"
+        Title="OhBot Control">
+
+  <Grid>
+    <!-- Main layout: top bar, persistent face on the right, tabs in the centre -->
+    <DockPanel>
+      <Border DockPanel.Dock="Top" Padding="12,8" Background="#1B2430">
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="OhBot Control" FontWeight="Bold" FontSize="16" VerticalAlignment="Center" Foreground="#DDE6F2"/>
+          <Rectangle Width="1" Fill="#33445A" Margin="6,0"/>
+          <TextBlock Text="Host" VerticalAlignment="Center" Foreground="#9FB2C8"/>
+          <TextBox Text="{Binding Host}" Width="120" VerticalAlignment="Center" ToolTip.Tip="{x:Static core:HelpText.Host}"/>
+          <TextBlock Text="Port" VerticalAlignment="Center" Foreground="#9FB2C8"/>
+          <TextBox Text="{Binding Port}" Width="70" VerticalAlignment="Center" ToolTip.Tip="{x:Static core:HelpText.Port}"/>
+          <ComboBox ItemsSource="{Binding LaunchControllers}" SelectedItem="{Binding LaunchController}"
+                    Width="110" VerticalAlignment="Center" ToolTip.Tip="{x:Static core:HelpText.LaunchController}"/>
+          <Button Content="Launch engine" Command="{Binding LaunchEngineCommand}" ToolTip.Tip="{x:Static core:HelpText.LaunchEngine}"/>
+          <Button Content="Attach" Command="{Binding AttachCommand}" ToolTip.Tip="{x:Static core:HelpText.Attach}"/>
+          <Button Content="Disconnect" Command="{Binding DisconnectCommand}" ToolTip.Tip="{x:Static core:HelpText.Disconnect}"/>
+          <Border CornerRadius="8" Padding="8,3" VerticalAlignment="Center"
+                  Background="{Binding IsConnected, Converter={x:Static views:Converters.ConnectionBrush}}">
+            <TextBlock Text="{Binding ConnectionText}" Foreground="White" FontSize="12"/>
+          </Border>
+          <Button Content="?" FontWeight="Bold" Width="34" Command="{Binding ToggleHelpCommand}" ToolTip.Tip="{x:Static core:HelpText.Help}"/>
+        </StackPanel>
+      </Border>
+
+      <!-- Persistent face + status, visible on every page -->
+      <Border DockPanel.Dock="Right" Width="300" Background="#141A22" Margin="0,8,8,8" CornerRadius="8" Padding="10">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Text="Face preview" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"
+                     ToolTip.Tip="{x:Static core:HelpText.FacePreview}"/>
+          <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,8,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Border CornerRadius="10" Padding="10,3"
+                      Background="{Binding Dashboard.State, Converter={x:Static views:Converters.StateBrush}}"
+                      ToolTip.Tip="{x:Static core:HelpText.StateIndicator}">
+                <TextBlock Text="{Binding Dashboard.State}" Foreground="White" FontWeight="SemiBold"/>
+              </Border>
+              <TextBlock Text="TTS:" VerticalAlignment="Center" Foreground="#9FB2C8"/>
+              <TextBlock Text="{Binding Dashboard.ActiveEngine}" VerticalAlignment="Center" FontWeight="SemiBold"
+                         ToolTip.Tip="{x:Static core:HelpText.ActiveEngine}"/>
+            </StackPanel>
+          </StackPanel>
+          <views:FaceControl Pose="{Binding Dashboard.Pose}"/>
+        </DockPanel>
+      </Border>
+
+      <TabControl Margin="8,8,0,8" SelectedIndex="{Binding SelectedTab}">
+        <TabItem Header="Dashboard">
+          <views:DashboardView DataContext="{Binding Dashboard}"/>
+        </TabItem>
+        <TabItem Header="Setup">
+          <views:SetupView DataContext="{Binding Setup}"/>
+        </TabItem>
+        <TabItem Header="Configuration">
+          <views:ConfigurationView DataContext="{Binding Configuration}"/>
+        </TabItem>
+        <TabItem Header="Manual control">
+          <views:ManualControlView DataContext="{Binding ManualControl}"/>
+        </TabItem>
+        <TabItem Header="Logs">
+          <views:LogsView DataContext="{Binding Logs}"/>
+        </TabItem>
+      </TabControl>
+    </DockPanel>
+
+    <!-- Help overlay -->
+    <Border IsVisible="{Binding ShowHelp}" Background="#CC0A0E14">
+      <Border MaxWidth="720" MaxHeight="640" Margin="24" Background="#161C26"
+              BorderBrush="#33507A" BorderThickness="1" CornerRadius="10" Padding="20">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+            <TextBlock Text="OhBot Control — guide" FontSize="20" FontWeight="Bold"/>
+            <Button Content="✕" HorizontalAlignment="Right" Width="34" Command="{Binding CloseHelpCommand}"/>
+          </Grid>
+          <ScrollViewer>
+            <StackPanel Spacing="12">
+              <TextBlock Text="{x:Static core:HelpText.Intro}" TextWrapping="Wrap" Foreground="#C7D4E4"/>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Dashboard" FontWeight="Bold" Foreground="#6EA8E0"/>
+                <TextBlock Text="{x:Static core:HelpText.PageDashboard}" TextWrapping="Wrap"/>
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Setup" FontWeight="Bold" Foreground="#6EA8E0"/>
+                <TextBlock Text="{x:Static core:HelpText.PageSetup}" TextWrapping="Wrap"/>
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Configuration" FontWeight="Bold" Foreground="#6EA8E0"/>
+                <TextBlock Text="{x:Static core:HelpText.PageConfiguration}" TextWrapping="Wrap"/>
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Manual control" FontWeight="Bold" Foreground="#6EA8E0"/>
+                <TextBlock Text="{x:Static core:HelpText.PageManualControl}" TextWrapping="Wrap"/>
+              </StackPanel>
+              <StackPanel Spacing="2">
+                <TextBlock Text="Logs" FontWeight="Bold" Foreground="#6EA8E0"/>
+                <TextBlock Text="{x:Static core:HelpText.PageLogs}" TextWrapping="Wrap"/>
+              </StackPanel>
+              <TextBlock Text="Tip: hover any control for a one-line explanation."
+                         FontStyle="Italic" Foreground="#9FB2C8" TextWrapping="Wrap"/>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Border>
+  </Grid>
+</Window>

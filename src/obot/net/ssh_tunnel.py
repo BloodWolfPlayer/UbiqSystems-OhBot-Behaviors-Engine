@@ -15,8 +15,8 @@ class SSHTunnelError(RuntimeError):
 def open_ollama_tunnel(cfg: OllamaSSHConfig) -> Iterator[int]:
     """Open an SSH port forward to a remote Ollama and yield the bound local port."""
 
-    #* Validate the required fields up front so the user gets a clear message
-    #* instead of a paramiko stack trace when something is missing.
+    # Validate the required fields up front so the user gets a clear message
+    # instead of a paramiko stack trace when something is missing.
     if not cfg.host:
         raise SSHTunnelError("ollama_ssh.host is empty, fill it in config.json.")
     if not cfg.user:
@@ -40,8 +40,8 @@ def open_ollama_tunnel(cfg: OllamaSSHConfig) -> Iterator[int]:
         ssh_username=cfg.user,
         ssh_pkey=str(key_path),
         remote_bind_address=(cfg.remote_ollama_host, cfg.remote_ollama_port),
-        #* Bind to port 0 so the OS picks a free local port. The chosen port is read
-        #* back from forwarder.local_bind_port and handed to the HTTP client.
+        # Bind to port 0 so the OS picks a free local port. The chosen port is read
+        # back from forwarder.local_bind_port and handed to the HTTP client.
         local_bind_address=("127.0.0.1", 0),
     )
 

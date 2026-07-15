@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:ObotControl.Core.ViewModels;assembly=ObotControl.Core"
+             xmlns:core="clr-namespace:ObotControl.Core;assembly=ObotControl.Core"
+             xmlns:views="clr-namespace:ObotControl.App.Views"
+             x:Class="ObotControl.App.Views.DashboardView"
+             x:DataType="vm:DashboardViewModel" x:CompileBindings="True">
+  <Grid ColumnDefinitions="300,*" Margin="4">
+
+    <!-- Session controls -->
+    <Border Grid.Column="0" Background="#141A22" CornerRadius="8" Padding="12" Margin="0,0,10,0">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Session" FontWeight="Bold" FontSize="15"/>
+        <TextBlock Text="Backend"/>
+        <ComboBox ItemsSource="{Binding Backends}" SelectedItem="{Binding SelectedBackend}"
+                  HorizontalAlignment="Stretch" ToolTip.Tip="{x:Static core:HelpText.Backend}"/>
+        <TextBlock Text="Model" IsVisible="{Binding RequiresModel}"/>
+        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding RequiresModel}">
+          <ComboBox Grid.Column="0" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}"
+                    HorizontalAlignment="Stretch" ToolTip.Tip="{x:Static core:HelpText.Model}"/>
+          <Button Grid.Column="1" Content="↻" Command="{Binding RefreshModelsCommand}" ToolTip.Tip="{x:Static core:HelpText.RefreshModels}"/>
+        </Grid>
+        <TextBlock Text="Controller"/>
+        <ComboBox ItemsSource="{Binding Controllers}" SelectedItem="{Binding SelectedController}"
+                  HorizontalAlignment="Stretch" ToolTip.Tip="{x:Static core:HelpText.Controller}"/>
+        <Grid ColumnDefinitions="*,*">
+          <Button Grid.Column="0" Content="Start" Command="{Binding StartSessionCommand}"
+                  IsEnabled="{Binding CanStart}" HorizontalAlignment="Stretch" ToolTip.Tip="{x:Static core:HelpText.StartSession}"/>
+          <Button Grid.Column="1" Content="Stop" Command="{Binding StopSessionCommand}"
+                  IsEnabled="{Binding SessionActive}" HorizontalAlignment="Stretch" ToolTip.Tip="{x:Static core:HelpText.StopSession}"/>
+        </Grid>
+        <Button Content="Switch model (restart)" Command="{Binding SwitchCommand}"
+                IsEnabled="{Binding SessionActive}" HorizontalAlignment="Stretch" ToolTip.Tip="{x:Static core:HelpText.SwitchSession}"/>
+        <Separator/>
+        <TextBlock Text="Microphone"/>
+        <ComboBox ItemsSource="{Binding MicModes}" SelectedItem="{Binding MicMode}"
+                  IsEnabled="{Binding SessionActive}" HorizontalAlignment="Stretch" ToolTip.Tip="{x:Static core:HelpText.MicMode}"/>
+
+        <!-- Push-to-talk controls (only shown in ptt mode) -->
+        <StackPanel IsVisible="{Binding IsPtt}" Spacing="6">
+          <Button Content="🎤 Talk (capture one phrase)" Command="{Binding TriggerPttCommand}"
+                  IsEnabled="{Binding SessionActive}" HorizontalAlignment="Stretch"
+                  Background="#2F6FD6" Foreground="White" ToolTip.Tip="{x:Static core:HelpText.PttTalk}"/>
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Hotkey:" VerticalAlignment="Center" Foreground="#9FB2C8"/>
+            <Border Background="#0E141B" CornerRadius="4" Padding="8,2" IsVisible="{Binding !CapturingHotkey}">
+              <TextBlock Text="{Binding PttKey}" FontWeight="SemiBold"/>
+            </Border>
+            <TextBlock Text="press a key…" Foreground="#E0A040" VerticalAlignment="Center" IsVisible="{Binding CapturingHotkey}"/>
+            <Button Content="Set…" Command="{Binding StartCaptureHotkeyCommand}" ToolTip.Tip="{x:Static core:HelpText.PttHotkey}"/>
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- Transcript + input -->
+    <Grid Grid.Column="1" RowDefinitions="*,Auto,Auto">
+      <Border Grid.Row="0" Background="#0E141B" CornerRadius="8">
+        <ScrollViewer x:Name="TranscriptScroll">
+          <ItemsControl ItemsSource="{Binding Transcript}" Margin="10">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TranscriptItem">
+                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,3">
+                  <TextBlock Text="{Binding Prefix}" FontWeight="Bold" MinWidth="72"
+                             Foreground="#6EA8E0"/>
+                  <TextBlock Text="{Binding Display}" TextWrapping="Wrap" MaxWidth="560"
+                             TextDecorations="{Binding CutOff, Converter={x:Static views:Converters.CutOffDecoration}}"/>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+
+      <!-- Live "as you talk" line: interim speech, replaced by the final utterance -->
+      <Border Grid.Row="1" IsVisible="{Binding HasPendingUser}" Background="#182230"
+              CornerRadius="8" Padding="10,6" Margin="0,8,0,0">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="You" FontWeight="Bold" MinWidth="72" Foreground="#6EA8E0"/>
+          <TextBlock Text="{Binding PendingUserText}" FontStyle="Italic" Foreground="#9FB2C8"
+                     TextWrapping="Wrap" MaxWidth="560"/>
+        </StackPanel>
+      </Border>
+
+      <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" Margin="0,8,0,0">
+        <TextBox Grid.Column="0" Watermark="Type a message…" Text="{Binding InputText}"
+                 IsEnabled="{Binding CanConverse}" ToolTip.Tip="{x:Static core:HelpText.Send}"/>
+        <Button Grid.Column="1" Content="Send" Command="{Binding SendCommand}"
+                IsEnabled="{Binding CanConverse}" ToolTip.Tip="{x:Static core:HelpText.Send}"/>
+        <Button Grid.Column="2" Content="⏹ INTERRUPT" Command="{Binding InterruptCommand}"
+                IsEnabled="{Binding SessionActive}" Background="#B4442E" Foreground="White" FontWeight="Bold"
+                ToolTip.Tip="{x:Static core:HelpText.Interrupt}"/>
+      </Grid>
+    </Grid>
+  </Grid>
+</UserControl>

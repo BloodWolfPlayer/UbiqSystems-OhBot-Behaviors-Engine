@@ -1,0 +1,128 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:ObotControl.Core.ViewModels;assembly=ObotControl.Core"
+             xmlns:core="clr-namespace:ObotControl.Core;assembly=ObotControl.Core"
+             xmlns:views="clr-namespace:ObotControl.App.Views"
+             x:Class="ObotControl.App.Views.SetupView"
+             x:DataType="vm:SetupViewModel" x:CompileBindings="True">
+  <ScrollViewer>
+    <StackPanel Margin="10" Spacing="14" MaxWidth="820" HorizontalAlignment="Left">
+
+      <views:PythonSetupView DataContext="{Binding Python}"/>
+
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Button Content="Refresh devices &amp; voices" Command="{Binding RefreshDevicesCommand}" IsEnabled="{Binding Connected}"
+                ToolTip.Tip="{x:Static core:HelpText.RefreshDevices}"/>
+        <Button Content="Save" Command="{Binding SaveCommand}" IsEnabled="{Binding Connected}"
+                ToolTip.Tip="{x:Static core:HelpText.Save}"/>
+        <Button Content="Reload" Command="{Binding ReloadCommand}" IsEnabled="{Binding Connected}"
+                ToolTip.Tip="{x:Static core:HelpText.Reload}"/>
+        <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Foreground="#9FB2C8"/>
+      </StackPanel>
+
+      <!-- Credentials -->
+      <Border Background="#141A22" CornerRadius="8" Padding="12">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Credentials &amp; hardware" FontWeight="Bold" FontSize="15"/>
+          <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="OhBot COM port" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding OhbotPort}" Width="140" HorizontalAlignment="Left"
+                     ToolTip.Tip="{x:Static core:HelpText.ComPort}"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Gemini API key" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding GeminiApiKey}" PasswordChar="•"
+                     ToolTip.Tip="{x:Static core:HelpText.ApiKey}"/>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Ollama SSH -->
+      <Border Background="#141A22" CornerRadius="8" Padding="12" ToolTip.Tip="{x:Static core:HelpText.SshFields}">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Remote Ollama (SSH)" FontWeight="Bold" FontSize="15"/>
+          <Grid ColumnDefinitions="160,*,120,120" RowDefinitions="Auto,Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="Host" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding SshHost}"/>
+            <TextBlock Grid.Row="0" Grid.Column="2" Text="Port" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding SshPort}"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="User" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SshUser}"/>
+            <TextBlock Grid.Row="1" Grid.Column="2" Text="Ollama port" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding RemoteOllamaPort}"/>
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="Private key path" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding SshKeyPath}"/>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Microphone -->
+      <Border Background="#141A22" CornerRadius="8" Padding="12">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Microphone &amp; speech-to-text" FontWeight="Bold" FontSize="15"/>
+          <Grid ColumnDefinitions="*,Auto">
+            <ComboBox Grid.Column="0" ItemsSource="{Binding Mics}" SelectedItem="{Binding SelectedMic}"
+                      HorizontalAlignment="Stretch" ToolTip.Tip="{x:Static core:HelpText.MicPick}"/>
+            <Button Grid.Column="1" Content="Test mic (3s)" Command="{Binding TestMicCommand}"
+                    ToolTip.Tip="{x:Static core:HelpText.TestMic}"/>
+          </Grid>
+          <ProgressBar Minimum="0" Maximum="3000" Value="{Binding MicLevel}" Height="10"/>
+          <TextBlock Text="{Binding MicPeak, StringFormat='peak {0:0}'}" Foreground="#9FB2C8"/>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="STT engine" VerticalAlignment="Center"/>
+            <ComboBox ItemsSource="{Binding SttEngines}" SelectedItem="{Binding SttEngine}" Width="120"
+                      ToolTip.Tip="{x:Static core:HelpText.SttEngine}"/>
+            <TextBlock Text="Vosk model path" VerticalAlignment="Center"/>
+            <TextBox Text="{Binding VoskModelPath}" Width="280" ToolTip.Tip="{x:Static core:HelpText.VoskModel}"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <ComboBox ItemsSource="{Binding VoskModelOptions}" SelectedItem="{Binding SelectedVoskModelOption}" Width="260"/>
+            <Button Content="Auto-setup Vosk model" Command="{Binding SetupVoskCommand}"
+                    ToolTip.Tip="{x:Static core:HelpText.VoskAutoSetup}"/>
+            <Button Content="Cancel" Command="{Binding CancelVoskSetupCommand}" IsVisible="{Binding VoskSetupBusy}"/>
+          </StackPanel>
+          <ProgressBar Minimum="0" Maximum="100" Value="{Binding VoskSetupPercent}" IsIndeterminate="{Binding VoskSetupIndeterminate}"
+                       IsVisible="{Binding VoskSetupBusy}" Height="10"/>
+          <TextBlock Text="{Binding VoskSetupStatus}" Foreground="#9FB2C8"/>
+        </StackPanel>
+      </Border>
+
+      <!-- TTS voices -->
+      <Border Background="#141A22" CornerRadius="8" Padding="12">
+        <StackPanel Spacing="8">
+          <TextBlock Text="Text-to-speech voices" FontWeight="Bold" FontSize="15"/>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="Engine chain" VerticalAlignment="Center"/>
+            <ComboBox ItemsSource="{Binding TtsEngines}" SelectedItem="{Binding TtsEngine}" Width="120"
+                      ToolTip.Tip="{x:Static core:HelpText.TtsEngine}"/>
+          </StackPanel>
+          <TextBox Text="{Binding TestText}" Watermark="Test sentence"/>
+          <Grid ColumnDefinitions="90,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="Edge ★" VerticalAlignment="Center" ToolTip.Tip="Microsoft Edge neural voices — free, online, best quality."/>
+            <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding EdgeVoices}" SelectedItem="{Binding EdgeVoice}" HorizontalAlignment="Stretch"/>
+            <Button Grid.Row="0" Grid.Column="2" Content="Test" Command="{Binding TestVoiceCommand}" CommandParameter="edge"
+                    ToolTip.Tip="{x:Static core:HelpText.TestVoice}"/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Kokoro ★" VerticalAlignment="Center" ToolTip.Tip="Kokoro — offline neural voice, best local quality."/>
+            <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding KokoroVoices}" SelectedItem="{Binding KokoroVoice}" HorizontalAlignment="Stretch"/>
+            <Button Grid.Row="1" Grid.Column="2" Content="Test" Command="{Binding TestVoiceCommand}" CommandParameter="kokoro"
+                    ToolTip.Tip="{x:Static core:HelpText.TestVoice}"/>
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="gTTS" VerticalAlignment="Center" ToolTip.Tip="Google Translate TTS — free, online. The value is the accent (TLD)."/>
+            <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding GttsAccents}" SelectedItem="{Binding GttsAccent}" HorizontalAlignment="Stretch"/>
+            <Button Grid.Row="2" Grid.Column="2" Content="Test" Command="{Binding TestVoiceCommand}" CommandParameter="gtts"
+                    ToolTip.Tip="{x:Static core:HelpText.TestVoice}"/>
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="Gemini" VerticalAlignment="Center"/>
+            <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding GeminiVoices}" SelectedItem="{Binding GeminiVoice}" HorizontalAlignment="Stretch"/>
+            <Button Grid.Row="3" Grid.Column="2" Content="Test" Command="{Binding TestVoiceCommand}" CommandParameter="gemini"
+                    ToolTip.Tip="{x:Static core:HelpText.TestVoice}"/>
+            <TextBlock Grid.Row="4" Grid.Column="0" Text="Piper" VerticalAlignment="Center"/>
+            <ComboBox Grid.Row="4" Grid.Column="1" ItemsSource="{Binding PiperVoices}" SelectedItem="{Binding PiperVoice}" HorizontalAlignment="Stretch"/>
+            <Button Grid.Row="4" Grid.Column="2" Content="Test" Command="{Binding TestVoiceCommand}" CommandParameter="piper"
+                    ToolTip.Tip="{x:Static core:HelpText.TestVoice}"/>
+            <TextBlock Grid.Row="5" Grid.Column="0" Text="Local" VerticalAlignment="Center"/>
+            <ComboBox Grid.Row="5" Grid.Column="1" ItemsSource="{Binding LocalVoices}" SelectedItem="{Binding LocalVoice}" HorizontalAlignment="Stretch"/>
+            <Button Grid.Row="5" Grid.Column="2" Content="Test" Command="{Binding TestVoiceCommand}" CommandParameter="local"
+                    ToolTip.Tip="{x:Static core:HelpText.TestVoice}"/>
+          </Grid>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

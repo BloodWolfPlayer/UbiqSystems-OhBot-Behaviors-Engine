@@ -5,13 +5,13 @@ from dataclasses import dataclass
 
 from .models import PipelineEvent
 
-#* The four token shapes the processor recognises in the stream.
-#* Order matters here: !Delay\d+ must be tried before the bare [.!?] alternative,
-#* otherwise the leading ! of a delay marker would be eaten as a sentence terminator.
+# The four token shapes the processor recognises in the stream.
+# Order matters here: !Delay\d+ must be tried before the bare [.!?] alternative,
+# otherwise the leading ! of a delay marker would be eaten as a sentence terminator.
 TOKEN_RE = re.compile(r"\[[^\[\]]+\]|\([^()]+\)|!Delay\d+|[.!?]")
 
-#? Matches any prefix of "!Delay<digits>" sitting at the very end of the buffer.
-#? Used to detect a control token that got cut mid stream, so we can keep it for next chunk.
+# Matches any prefix of "!Delay<digits>" sitting at the very end of the buffer.
+# Used to detect a control token that got cut mid stream, so we can keep it for next chunk.
 _INCOMPLETE_DELAY_TAIL_RE = re.compile(r"!(?:D(?:e(?:l(?:a(?:y\d*)?)?)?)?)?$")
 
 
@@ -47,10 +47,9 @@ class StreamProcessor:
             token = match.group(0)
 
             if token.startswith("!Delay") and match.end() == len(self._buffer):
-                #! Tricky case: !Delay500 sitting at the very tail of the buffer might
-                #! still be growing (next chunk could deliver more digits, turning 500 into 5000).
-                #! Leave it in the buffer and wait for the next feed call to decide.
-                #todo Double check
+                # A !Delay500 sitting at the very tail of the buffer might still be
+                # growing (the next chunk could turn 500 into 5000), so leave it in
+                # the buffer and let the next feed() decide.
                 break
 
             part_before = self._buffer[position:match.start()]
@@ -95,9 +94,9 @@ class StreamProcessor:
         return events
 
     def _find_incomplete_token(self, text: str) -> int | None:
-        #* Look at the tail of the unprocessed buffer for any opening control character
-        #* whose closing counterpart has not arrived yet. Returns the earliest such index
-        #* so everything from that point onward is preserved for the next chunk.
+        # Look at the tail of the unprocessed buffer for any opening control character
+        # whose closing counterpart has not arrived yet. Returns the earliest such index
+        # so everything from that point onward is preserved for the next chunk.
         candidates: list[int] = []
 
         last_open_sq = text.rfind("[")

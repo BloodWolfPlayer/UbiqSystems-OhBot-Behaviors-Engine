@@ -39,8 +39,8 @@ class InterruptController:
         """Raise the interrupt. Safe to call from any thread."""
 
         def _set() -> None:
-            #* First trigger wins; later ones during the same turn are ignored so the
-            #* recorded reason reflects whatever actually cut the bot off first.
+            # First trigger wins; later ones during the same turn are ignored so the
+            # recorded reason reflects whatever actually cut the bot off first.
             if not self._event.is_set():
                 self._signal = InterruptSignal(reason=reason)
                 self._event.set()
@@ -48,7 +48,7 @@ class InterruptController:
         try:
             self._loop.call_soon_threadsafe(_set)
         except RuntimeError:
-            #* Loop already closed (shutdown race) — nothing left to interrupt.
+            # Loop already closed (shutdown race) — nothing left to interrupt.
             pass
 
     def is_set(self) -> bool:

@@ -73,8 +73,8 @@ def build_timeline(text: str, samples: np.ndarray, sample_rate: int) -> SpeechTi
     if not matches or duration <= 0.0:
         return SpeechTimeline(words=[], duration_s=duration)
 
-    #* Trim lead-in/tail silence with a coarse envelope so word times line up with
-    #* the voiced part of the clip, not the file boundaries.
+    # Trim lead-in/tail silence with a coarse envelope so word times line up with
+    # the voiced part of the clip, not the file boundaries.
     env = envelope(samples, sample_rate, fps=50.0)
     voiced = np.nonzero(env > 0.08)[0]
     if voiced.size:
@@ -84,8 +84,8 @@ def build_timeline(text: str, samples: np.ndarray, sample_rate: int) -> SpeechTi
         speech_start, speech_end = 0.0, duration
     span = max(0.05, speech_end - speech_start)
 
-    #* Weight each word by its length (+1 for the pause that follows it); short
-    #* words get proportionally less of the clip than long ones.
+    # Weight each word by its length (+1 for the pause that follows it); short
+    # words get proportionally less of the clip than long ones.
     weights = [len(m.group(0)) + 1 for m in matches]
     total = float(sum(weights))
 
@@ -134,9 +134,9 @@ def build_mouth_track(
     gated = np.where(env <= gate, 0.0, (env - gate) / (1.0 - gate))
     shaped = np.power(gated, max(0.1, mouth.gamma))
 
-    #* One-pole smoothing with separate opening (attack) and closing (release)
-    #* speeds: 1.0 follows instantly, small values glide. Keeps consonant flutter
-    #* out of the servos while still snapping open on syllable onsets.
+    # One-pole smoothing with separate opening (attack) and closing (release)
+    # speeds: 1.0 follows instantly, small values glide. Keeps consonant flutter
+    # out of the servos while still snapping open on syllable onsets.
     attack = float(np.clip(mouth.attack, 0.05, 1.0))
     release = float(np.clip(mouth.release, 0.05, 1.0))
     out = np.empty_like(shaped)

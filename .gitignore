@@ -24,12 +24,10 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
 # PyInstaller
 #   Usually these files are written by a python script from a template
 #   before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
 *.spec
 
 # Installer logs
@@ -222,6 +220,16 @@ __marimo__/
 # Local config containing API keys and SSH credentials
 config.json
 /ohbotData
+
+# .NET GUI build output (gui/ObotControl)
+gui/**/bin/
+gui/**/obj/
+gui/**/*.user
+
+# .NET GUI build output (gui/ObotControl)
+gui/**/bin/
+gui/**/obj/
+gui/**/*.user
 
 # taining data
 ohbot_data

@@ -38,10 +38,10 @@ class OllamaLLMClient:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.system_prompt = system_prompt
-        #* Ollama wants the system prompt as the first entry in the messages list, in contrast
-        #* to Gemini where the system instruction lives in a separate top level field.
+        # Ollama wants the system prompt as the first entry in the messages list, in contrast
+        # to Gemini where the system instruction lives in a separate top level field.
         self._messages: list[dict] = [{"role": "system", "content": system_prompt}]
-        #* Folded into the next user turn after an interrupt (see GeminiLLMClient).
+        # Folded into the next user turn after an interrupt (see GeminiLLMClient).
         self._pending_note: str | None = None
 
     async def __aenter__(self) -> "OllamaLLMClient":
@@ -76,8 +76,8 @@ class OllamaLLMClient:
                                 f"Ollama /api/chat returned {response.status_code}: {text[:200]}"
                             )
 
-                        #* Ollama uses NDJSON: one JSON object per line. The last object has
-                        #* "done": true and may contain summary stats but no extra content.
+                        # Ollama uses NDJSON: one JSON object per line. The last object has
+                        # "done": true and may contain summary stats but no extra content.
                         async for line in response.aiter_lines():
                             if not line.strip():
                                 continue
@@ -94,7 +94,7 @@ class OllamaLLMClient:
                 except httpx.HTTPError as exc:
                     raise OllamaAPIError(f"network error while streaming: {exc}") from exc
         finally:
-            #* Persist partial output too, so an interrupt mid-stream still leaves the
-            #* assistant turn in history (see GeminiLLMClient for the rationale).
+            # Persist partial output too, so an interrupt mid-stream still leaves the
+            # assistant turn in history (see GeminiLLMClient for the rationale).
             if collected:
                 self._messages.append({"role": "assistant", "content": "".join(collected)})

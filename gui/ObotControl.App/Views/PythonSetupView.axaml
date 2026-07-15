@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:ObotControl.Core.ViewModels;assembly=ObotControl.Core"
+             xmlns:core="clr-namespace:ObotControl.Core;assembly=ObotControl.Core"
+             xmlns:views="clr-namespace:ObotControl.App.Views"
+             x:Class="ObotControl.App.Views.PythonSetupView"
+             x:DataType="vm:PythonSetupViewModel" x:CompileBindings="True">
+  <Border Background="#141A22" CornerRadius="8" Padding="12" ToolTip.Tip="{x:Static core:HelpText.PythonSetupIntro}">
+    <StackPanel Spacing="8">
+      <TextBlock Text="0. Python environment" FontWeight="Bold" FontSize="15"/>
+
+      <Border CornerRadius="6" Padding="8,4" HorizontalAlignment="Left"
+              Background="{Binding StatusKind, Converter={x:Static views:Converters.PythonStatusBrush}}">
+        <TextBlock Text="{Binding StatusText}" Foreground="White"/>
+      </Border>
+
+      <TextBlock Text="Automatic setup is only available on Windows — see README.md for manual setup."
+                 Foreground="#C46464" IsVisible="{Binding !IsSupported}"/>
+
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto" IsVisible="{Binding IsSupported}">
+        <ComboBox Grid.Column="0" ItemsSource="{Binding Candidates}" SelectedItem="{Binding SelectedCandidate}"
+                  HorizontalAlignment="Stretch" ToolTip.Tip="{x:Static core:HelpText.PythonCandidatePick}"/>
+        <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshCommand}" Margin="6,0,0,0"
+                ToolTip.Tip="{x:Static core:HelpText.PythonRefresh}"/>
+        <Button Grid.Column="2" Content="Prepare" Command="{Binding PrepareCommand}" Margin="6,0,0,0"
+                ToolTip.Tip="{x:Static core:HelpText.PythonPrepare}"/>
+        <Button Grid.Column="3" Content="Cancel" Command="{Binding CancelCommand}" Margin="6,0,0,0"
+                IsVisible="{Binding IsBusy}"/>
+      </Grid>
+
+      <ProgressBar Minimum="0" Maximum="100" Value="{Binding Percent}" IsIndeterminate="{Binding Indeterminate}"
+                   IsVisible="{Binding IsBusy}" Height="10"/>
+
+      <ListBox ItemsSource="{Binding RecentLines}" Height="120" IsVisible="{Binding IsBusy}"
+               Background="#0E1319" FontFamily="Consolas,monospace" FontSize="11"/>
+    </StackPanel>
+  </Border>
+</UserControl>

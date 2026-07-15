@@ -42,8 +42,8 @@ class MouthSettings:
 class GeminiTTSSettings:
     model: str = "gemini-2.5-flash-preview-tts"
     voice: str = "Kore"          # prebuilt voice name (Kore, Puck, Leda, Charon, ...)
-    #* Optional style instruction prepended to the text, e.g.
-    #* "Say this like an upbeat British news presenter:". Empty = plain reading.
+    # Optional style instruction prepended to the text, e.g.
+    # "Say this like an upbeat British news presenter:". Empty = plain reading.
     style: str = ""
 
     @classmethod
@@ -61,12 +61,12 @@ class PiperTTSSettings:
     """
 
     voice: str = "en_GB-cori-high"
-    #* Explicit path to a .onnx voice model. Empty = ohbotData/piper/<voice>.onnx.
+    # Explicit path to a .onnx voice model. Empty = ohbotData/piper/<voice>.onnx.
     model_path: str = ""
-    #* Download the voice model automatically on first use (one-time, ~60-100 MB).
+    # Download the voice model automatically on first use (one-time, ~60-100 MB).
     auto_download: bool = True
-    #* Load the model in the background at startup so the first sentence doesn't
-    #* pay the ~3s model-load cost.
+    # Load the model in the background at startup so the first sentence doesn't
+    # pay the ~3s model-load cost.
     warm_up: bool = True
     length_scale: float = 1.0
     volume: float = 1.0
@@ -88,17 +88,80 @@ class LocalTTSSettings:
 
 
 @dataclass
+class EdgeTTSSettings:
+    """Microsoft Edge online neural TTS (edge-tts): Azure-quality voices, free, no key.
+
+    ``voice`` is a Microsoft neural voice short name (``en-GB-SoniaNeural``,
+    ``en-US-AriaNeural``, ...). ``rate``/``volume``/``pitch`` are edge-tts prosody
+    strings (``"+0%"``, ``"-10%"``, ``"+5Hz"``). Needs internet; unofficial endpoint.
+    """
+
+    voice: str = "en-GB-SoniaNeural"
+    rate: str = "+0%"
+    volume: str = "+0%"
+    pitch: str = "+0Hz"
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "EdgeTTSSettings":
+        return _from_dict(cls, data)
+
+
+@dataclass
+class KokoroTTSSettings:
+    """Kokoro: a small, high-quality open TTS model running fully offline via ONNX.
+
+    Reads more naturally than Piper and runs faster than real time on the CPU.
+    ``voice`` is a Kokoro voice id (``bf_emma``/``bf_alice`` British female,
+    ``af_sarah`` American female, ``bm_george`` British male, ...). The model
+    (~330 MB) and voice pack download automatically to ``ohbotData/kokoro/``.
+    """
+
+    voice: str = "bf_emma"
+    speed: float = 1.0
+    lang: str = "en-us"
+    # Explicit paths override the auto-downloaded ohbotData/kokoro/ files.
+    model_path: str = ""
+    voices_path: str = ""
+    auto_download: bool = True
+    warm_up: bool = True
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "KokoroTTSSettings":
+        return _from_dict(cls, data)
+
+
+@dataclass
+class GTTSSettings:
+    """Google Translate TTS (gTTS): free, no key, decent quality. Needs internet.
+
+    ``tld`` picks the accent of the Google endpoint (``co.uk`` British, ``com``
+    US, ``com.au`` Australian, ``ie`` Irish, ...). ``slow`` reads more slowly.
+    """
+
+    lang: str = "en"
+    tld: str = "co.uk"
+    slow: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "GTTSSettings":
+        return _from_dict(cls, data)
+
+
+@dataclass
 class TTSSettings:
-    #* "auto" = Gemini (when an API key exists) -> Piper -> SAPI/espeak, falling
-    #* through automatically on any failure. Explicit modes pin one engine:
-    #* "gemini", "piper", or "local" (the old SAPI/espeak voice).
+    # "auto" chains the best available voices, falling through on any failure:
+    # edge -> kokoro -> piper -> local. Explicit modes pin one engine:
+    # "edge", "kokoro", "gtts", "gemini", "piper", or "local".
     engine: str = "auto"
     gemini: GeminiTTSSettings = field(default_factory=GeminiTTSSettings)
     piper: PiperTTSSettings = field(default_factory=PiperTTSSettings)
     local: LocalTTSSettings = field(default_factory=LocalTTSSettings)
-    #* After an engine failure, don't retry it for this long (keeps sentences
-    #* flowing on the next voice instead of paying a timeout per sentence).
-    #* Gemini's free tier is ~3 requests/min, so quota errors land here often.
+    edge: EdgeTTSSettings = field(default_factory=EdgeTTSSettings)
+    kokoro: KokoroTTSSettings = field(default_factory=KokoroTTSSettings)
+    gtts: GTTSSettings = field(default_factory=GTTSSettings)
+    # After an engine failure, don't retry it for this long (keeps sentences
+    # flowing on the next voice instead of paying a timeout per sentence).
+    # Gemini's free tier is ~3 requests/min, so quota errors land here often.
     failure_cooldown_s: float = 90.0
 
     @classmethod
@@ -109,6 +172,9 @@ class TTSSettings:
             gemini=GeminiTTSSettings.from_dict(data.get("gemini")),
             piper=PiperTTSSettings.from_dict(data.get("piper")),
             local=LocalTTSSettings.from_dict(data.get("local")),
+            edge=EdgeTTSSettings.from_dict(data.get("edge")),
+            kokoro=KokoroTTSSettings.from_dict(data.get("kokoro")),
+            gtts=GTTSSettings.from_dict(data.get("gtts")),
             failure_cooldown_s=float(data.get("failure_cooldown_s", cls.failure_cooldown_s)),
         )
 
@@ -143,9 +209,9 @@ class SpeechSettings:
     gesture: AIGestureSettings = field(default_factory=AIGestureSettings)
     #* sounddevice output device index; None = system default speakers.
     output_device_index: int | None = None
-    #* When interrupted, playback runs to the end of the current word plus this pad.
+    # When interrupted, playback runs to the end of the current word plus this pad.
     word_stop_pad_s: float = 0.06
-    #* Pacing estimate used when no real audio exists (console controller, TTS failure).
+    # Pacing estimate used when no real audio exists (console controller, TTS failure).
     estimate_wpm: float = 160.0
 
     @classmethod
@@ -173,7 +239,7 @@ class MotionSettings:
     rate_limit: float = 30.0     # max servo travel in positions/sec (head, eyes)
     lip_rate_limit: float = 200.0  # lips need to snap much faster than the head
     write_epsilon: float = 0.05  # skip serial writes smaller than this position change
-    move_speed: int = 10         # ohbot speed argument used for mixer writes
+    move_speed: int = 3         # ohbot speed argument used for mixer writes
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> "MotionSettings":

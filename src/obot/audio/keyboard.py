@@ -4,8 +4,8 @@ import sys
 import threading
 from typing import Callable
 
-#* Cross-platform single-key reader. Windows has msvcrt; POSIX needs raw termios mode.
-#* Imported lazily/guarded so the module loads on either platform.
+# Cross-platform single-key reader. Windows has msvcrt; POSIX needs raw termios mode.
+# Imported lazily/guarded so the module loads on either platform.
 try:
     import msvcrt  # type: ignore
 
@@ -56,7 +56,7 @@ class KeyListener:
     def start(self) -> None:
         if self._thread is not None or not self.available:
             return
-        #* Cleared so a listener stopped for console mode can be started again.
+        # Cleared so a listener stopped for console mode can be started again.
         self._stop.clear()
         target = self._run_windows if _HAVE_MSVCRT else self._run_posix
         self._thread = threading.Thread(target=target, daemon=True)
@@ -67,7 +67,7 @@ class KeyListener:
         thread = self._thread
         if thread is not None and thread.is_alive():
             thread.join(timeout=0.3)
-        #* Reset so start() can spin up a fresh thread (toggling out of console mode).
+        # Reset so start() can spin up a fresh thread (toggling out of console mode).
         self._thread = None
 
     def _emit(self, ch: str) -> None:
@@ -75,7 +75,7 @@ class KeyListener:
             try:
                 self._on_key(ch)
             except Exception:
-                #* A misbehaving callback must never kill the listener thread.
+                # A misbehaving callback must never kill the listener thread.
                 pass
 
     def _run_windows(self) -> None:
@@ -84,7 +84,7 @@ class KeyListener:
                 ch = msvcrt.getwch()
                 self._emit(ch)
             else:
-                #* No blocking getwch() so the stop flag is checked promptly.
+                # No blocking getwch() so the stop flag is checked promptly.
                 self._stop.wait(0.03)
 
     def _run_posix(self) -> None:  # pragma: no cover - exercised only on POSIX
