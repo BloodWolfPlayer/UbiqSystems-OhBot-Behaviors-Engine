@@ -9,6 +9,12 @@ namespace ObotControl.Core.Services;
 public sealed class GuiSettings
 {
     public string? SelectedPythonPath { get; set; }
+
+    // Last-used Dashboard session selections, restored on the next launch.
+    public string? DashboardBackend { get; set; }
+    public string? DashboardController { get; set; }
+    public string? DashboardGeminiModel { get; set; }
+    public string? DashboardOllamaModel { get; set; }
 }
 
 public sealed class GuiSettingsStore

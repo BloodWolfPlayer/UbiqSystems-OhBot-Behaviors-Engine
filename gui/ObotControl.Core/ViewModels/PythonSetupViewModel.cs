@@ -137,7 +137,9 @@ public partial class PythonSetupViewModel : ObservableObject
     partial void OnSelectedCandidateChanged(PythonCandidate? value)
     {
         if (_loading || value is null) return;
-        _settings.Save(new GuiSettings { SelectedPythonPath = value.PythonExePath });
+        var settings = _settings.Load();
+        settings.SelectedPythonPath = value.PythonExePath;
+        _settings.Save(settings);
         ApplySelectionStatus(value);
         if (!IsReady) _ = PrepareAsync();
     }
@@ -172,7 +174,9 @@ public partial class PythonSetupViewModel : ObservableObject
             if (result.IsReady && result.Active is { } active)
             {
                 ReplaceCandidate(candidate, active);
-                _settings.Save(new GuiSettings { SelectedPythonPath = active.PythonExePath });
+                var settings = _settings.Load();
+                settings.SelectedPythonPath = active.PythonExePath;
+                _settings.Save(settings);
             }
         }
         catch (OperationCanceledException)

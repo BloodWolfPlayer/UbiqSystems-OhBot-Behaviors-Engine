@@ -49,8 +49,9 @@ public partial class ShellViewModel : ObservableObject
         Api = new EngineApi(Client);
         Store = new ConfigStore(Api);
         Logs = new LogsViewModel();
-        Dashboard = new DashboardViewModel(Api, Logs);
-        var python = new PythonSetupViewModel(new PythonEnvironmentService(), new GuiSettingsStore(), Logs);
+        var guiSettings = new GuiSettingsStore();
+        Dashboard = new DashboardViewModel(Api, Logs, guiSettings);
+        var python = new PythonSetupViewModel(new PythonEnvironmentService(), guiSettings, Logs);
         Setup = new SetupViewModel(Api, Store, Logs, python, new VoskModelSetupService());
         Configuration = new ConfigurationViewModel(Api, Store, Logs);
         ManualControl = new ManualControlViewModel(Api, Logs);
@@ -213,6 +214,9 @@ public partial class ShellViewModel : ObservableObject
         {
             await Store.LoadAsync();
             await Setup.RefreshDevicesCommand.ExecuteAsync(null);
+            // Restores the remembered model selection into the (now-populated) list —
+            // the picker itself was already restored from GuiSettings in the constructor.
+            if (Dashboard.RequiresModel) await Dashboard.RefreshModelsCommand.ExecuteAsync(null);
             var state = await Api.GetStateAsync();
             Dashboard.ApplyState(state);
             Logs.Append("info", "connected; config + devices loaded");

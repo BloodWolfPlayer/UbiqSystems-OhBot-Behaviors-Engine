@@ -17,6 +17,7 @@ public partial class JointPose : ObservableObject
     [ObservableProperty] private double _topLip = 5.0;
     [ObservableProperty] private double _bottomLip = 5.0;
     [ObservableProperty] private double _eyeTilt = 5.0;
+    [ObservableProperty] private double _headTilt = 5.0;
 
     /// <summary>Raised after any joint changes, so a view can trigger one redraw.</summary>
     public event EventHandler? Changed;
@@ -30,6 +31,7 @@ public partial class JointPose : ObservableObject
         TopLip = joints.Get("TopLip");
         BottomLip = joints.Get("BottomLip");
         EyeTilt = joints.Get("EyeTilt");
+        HeadTilt = joints.Get("HeadTilt");
         Changed?.Invoke(this, EventArgs.Empty);
     }
 }

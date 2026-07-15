@@ -10,7 +10,9 @@ namespace ObotControl.App.Views;
 ///
 /// * HeadTurn <b>yaws</b> the head: the features shift with parallax, the far side of
 ///   the shell foreshortens, and the shading moves — reading as a real turn rather
-///   than a flat slide. HeadNod raises/dips the whole assembly.
+///   than a flat slide. HeadNod raises/dips the whole assembly. HeadTilt <b>rolls</b>
+///   the head shell and features (not the neck, which stays upright) about the head
+///   center, like the roll servo mounted between neck and shell on the real robot.
 /// * A fixed light from the top-left shades everything: the shell carries a crown
 ///   highlight and a turned-away side in shadow, the eyes are glossy spheres with
 ///   catchlights, the lip plates are brushed metal.
@@ -104,9 +106,10 @@ public class FaceControl : Control
         var pose = Pose ?? new JointPose();
         double unit = Math.Min(b.Width, b.Height) * 0.92;
 
-        // Normalized head orientation, both -1..1.
+        // Normalized head orientation, all -1..1.
         double yaw = Math.Clamp(D(pose.HeadTurn) / 5.0, -1, 1);
         double pitch = Math.Clamp(D(pose.HeadNod) / 5.0, -1, 1);
+        double roll = Math.Clamp(D(pose.HeadTilt) / 5.0, -1, 1);
 
         double baseCx = b.Width / 2;
         double baseCy = b.Height * 0.90;
@@ -127,16 +130,26 @@ public class FaceControl : Control
             new Point(headCx, baseCy - unit * 0.075), unit * 0.26, unit * 0.045);
 
         DrawNeck(ctx, headCx, headCy + headH / 2 - unit * 0.04, baseCy, unit);
-        DrawHead(ctx, headCx, headCy, headW, headH, unit, yaw);
 
-        double eyeR = unit * 0.145;
-        double eyeY = headCy - unit * 0.14 + featureDy;
-        double eyeDX = unit * 0.185 * featureScaleX;
-        DrawEye(ctx, headCx + featureDx - eyeDX, eyeY, eyeR, pose, yaw);
-        DrawEye(ctx, headCx + featureDx + eyeDX, eyeY, eyeR, pose, yaw);
+        // The shell and features roll together about the head center; the neck above
+        // stays upright, matching a roll servo mounted between neck and shell.
+        double rollAngle = roll * Math.PI / 9; // up to 20 degrees each way
+        using (ctx.PushTransform(
+            Matrix.CreateTranslation(-headCx, -headCy) *
+            Matrix.CreateRotation(rollAngle) *
+            Matrix.CreateTranslation(headCx, headCy)))
+        {
+            DrawHead(ctx, headCx, headCy, headW, headH, unit, yaw);
 
-        DrawMouth(ctx, headCx + featureDx, headCy + unit * 0.235 + featureDy,
-            unit, featureScaleX, pose);
+            double eyeR = unit * 0.145;
+            double eyeY = headCy - unit * 0.14 + featureDy;
+            double eyeDX = unit * 0.185 * featureScaleX;
+            DrawEye(ctx, headCx + featureDx - eyeDX, eyeY, eyeR, pose, yaw);
+            DrawEye(ctx, headCx + featureDx + eyeDX, eyeY, eyeR, pose, yaw);
+
+            DrawMouth(ctx, headCx + featureDx, headCy + unit * 0.235 + featureDy,
+                unit, featureScaleX, pose);
+        }
     }
 
     private static void DrawBackground(DrawingContext ctx, Rect b)
@@ -233,7 +246,7 @@ public class FaceControl : Control
         // the joint values are.
         double irisR = r * 0.58;
         double dx = D(pose.EyeTurn) * r * 0.11 + yaw * r * 0.16;
-        double dy = D(pose.EyeTilt) * r * 0.11;
+        double dy = -D(pose.EyeTilt) * r * 0.11;
         double maxOffset = (r - irisR) * 0.9;
         double dist = Math.Sqrt(dx * dx + dy * dy);
         if (dist > maxOffset && dist > 0)
@@ -264,10 +277,10 @@ public class FaceControl : Control
             ctx.DrawEllipse(GlintLight, null, new Point(px + r * 0.15, py + r * 0.14), r * 0.05, r * 0.05);
         }
 
-        // Eyelid: a shell-blue disc clipped to the eyeball. LidBlink 5 = open (disc
+        // Eyelid: a shell-blue disc clipped to the eyeball. LidBlink 10 = open (disc
         // lifted a full eye-height above), 0 = closed (disc centred over the eye);
         // anything between covers the eye partway (a tired half-lid).
-        double openness = Math.Clamp(pose.LidBlink / 5.0, 0, 1);
+        double openness = Math.Clamp(pose.LidBlink / 10.0, 0, 1);
         double lidCy = cy - openness * (2 * r);
         using (ctx.PushGeometryClip(new EllipseGeometry(eyeRect)))
         {

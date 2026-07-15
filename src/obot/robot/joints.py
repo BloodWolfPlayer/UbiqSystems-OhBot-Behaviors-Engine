@@ -13,9 +13,12 @@ LIDBLINK = 3
 TOPLIP = 4
 BOTTOMLIP = 5
 EYETILT = 6
+# Motor 7 ("HeadRoll") is calibrated in MotorDefinitionsv21.omd on every stock
+# Ohbot build, but is only physically wired on units with the 8th servo fitted
+# (always present on Picoh). Harmless no-op on units without that servo.
+HEADTILT = 7
 
-# Joints the motor mixer manages. HEADROLL (7) exists on Picoh only.
-ALL_JOINTS = (HEADNOD, HEADTURN, EYETURN, LIDBLINK, TOPLIP, BOTTOMLIP, EYETILT)
+ALL_JOINTS = (HEADNOD, HEADTURN, EYETURN, LIDBLINK, TOPLIP, BOTTOMLIP, EYETILT, HEADTILT)
 
 # Joints that must snap rather than glide: lips during speech and eyelids for blinks.
 FAST_JOINTS = frozenset({LIDBLINK, TOPLIP, BOTTOMLIP})
@@ -28,6 +31,7 @@ JOINT_NAMES = {
     TOPLIP: "TopLip",
     BOTTOMLIP: "BottomLip",
     EYETILT: "EyeTilt",
+    HEADTILT: "HeadTilt",
 }
 
 NAME_TO_JOINT = {name: joint_id for joint_id, name in JOINT_NAMES.items()}

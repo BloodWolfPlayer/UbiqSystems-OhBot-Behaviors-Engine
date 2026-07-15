@@ -81,7 +81,7 @@ public sealed record ErrorEvent
 /// <summary>
 /// A joint-position frame (joint name → position 0..10), streamed ~15 Hz for the
 /// face preview. Modeled as a dictionary because the server sends the joint set by
-/// name (HeadNod, HeadTurn, EyeTurn, LidBlink, TopLip, BottomLip, EyeTilt).
+/// name (HeadNod, HeadTurn, EyeTurn, LidBlink, TopLip, BottomLip, EyeTilt, HeadTilt).
 /// </summary>
 public sealed class JointsEvent : Dictionary<string, double>
 {

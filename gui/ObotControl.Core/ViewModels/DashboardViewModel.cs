@@ -16,11 +16,22 @@ public partial class DashboardViewModel : ObservableObject
 {
     private readonly EngineApi _api;
     private readonly LogsViewModel _logs;
+    private readonly GuiSettingsStore _settings;
 
-    public DashboardViewModel(EngineApi api, LogsViewModel logs)
+    public DashboardViewModel(EngineApi api, LogsViewModel logs, GuiSettingsStore settings)
     {
         _api = api;
         _logs = logs;
+        _settings = settings;
+
+        // Restore the last-used backend/controller so a restart doesn't reset the
+        // session picker back to the defaults (config.json only remembers per-backend
+        // model MRUs, not which backend/controller/model was last selected).
+        var remembered = _settings.Load();
+        if (remembered.DashboardBackend is { } backend && Backends.Contains(backend))
+            SelectedBackend = backend;
+        if (remembered.DashboardController is { } controller && Controllers.Contains(controller))
+            SelectedController = controller;
     }
 
     public string[] Backends { get; } = { "scripted", "gemini", "ollama" };
@@ -52,7 +63,10 @@ public partial class DashboardViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanConverse))]
     private bool _sessionActive;
 
-    [ObservableProperty] private bool _connected;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanStart))]
+    [NotifyPropertyChangedFor(nameof(CanConverse))]
+    private bool _connected;
     [ObservableProperty] private BotState _state = BotState.Idle;
     [ObservableProperty] private string _activeEngine = "—";
 
@@ -88,7 +102,16 @@ public partial class DashboardViewModel : ObservableObject
             };
             Models.Clear();
             foreach (var m in models) Models.Add(m);
-            if (SelectedModel is null && Models.Count > 0) SelectedModel = Models[0];
+            if (SelectedModel is null && Models.Count > 0)
+            {
+                var remembered = SelectedBackend switch
+                {
+                    "gemini" => _settings.Load().DashboardGeminiModel,
+                    "ollama" => _settings.Load().DashboardOllamaModel,
+                    _ => null,
+                };
+                SelectedModel = remembered is not null && Models.Contains(remembered) ? remembered : Models[0];
+            }
             _logs.Append("info", $"{SelectedBackend}: {models.Count} model(s)");
         }
         catch (Exception ex)
@@ -206,6 +229,27 @@ public partial class DashboardViewModel : ObservableObject
         Models.Clear();
         SelectedModel = null;
         OnPropertyChanged(nameof(RequiresModel));
+        UpdateSettings(s => s.DashboardBackend = value);
+    }
+
+    partial void OnSelectedControllerChanged(string value) =>
+        UpdateSettings(s => s.DashboardController = value);
+
+    partial void OnSelectedModelChanged(string? value)
+    {
+        if (value is null) return;
+        UpdateSettings(s =>
+        {
+            if (SelectedBackend == "gemini") s.DashboardGeminiModel = value;
+            else if (SelectedBackend == "ollama") s.DashboardOllamaModel = value;
+        });
+    }
+
+    private void UpdateSettings(Action<GuiSettings> mutate)
+    {
+        var settings = _settings.Load();
+        mutate(settings);
+        _settings.Save(settings);
     }
 
     // -- event handling ----------------------------------------------------------------

@@ -10,6 +10,7 @@ physical robot.
 
 from __future__ import annotations
 
+import math
 import threading
 from collections.abc import Callable
 
@@ -25,6 +26,34 @@ _LID = "#cfc9bd"
 _MOUTH = "#5a1f24"
 _LIP = "#8a3038"
 _TEXT = "#9fb4c7"
+
+# Max HEADTILT swing, each direction, at position 0/10.
+_HEADTILT_DEG = 22.0
+
+
+def _rotate_pt(px: float, py: float, ox: float, oy: float, angle: float) -> tuple[float, float]:
+    """Rotate (px, py) by ``angle`` radians about pivot (ox, oy)."""
+    if not angle:
+        return px, py
+    s, c = math.sin(angle), math.cos(angle)
+    dx, dy = px - ox, py - oy
+    return ox + dx * c - dy * s, oy + dx * s + dy * c
+
+
+def _ellipse_points(
+    cx: float, cy: float, rx: float, ry: float, angle: float, ox: float, oy: float, n: int = 28
+) -> list[float]:
+    """Flat [x0, y0, x1, y1, ...] boundary of an ellipse (center cx,cy, radii rx,ry),
+    rotated by ``angle`` about pivot (ox, oy) -- used to draw a rolled HEADTILT as a
+    polygon, since tkinter's oval/rectangle primitives can't rotate on their own."""
+    pts: list[float] = []
+    for i in range(n):
+        t = 2 * math.pi * i / n
+        x = cx + rx * math.cos(t)
+        y = cy + ry * math.sin(t)
+        pts.extend(_rotate_pt(x, y, ox, oy, angle))
+    return pts
+
 
 # Sliders shown in the tuning panel: (attribute, label, from, to, resolution)
 _TUNING_FIELDS = [
@@ -212,41 +241,56 @@ class FaceWindow:
     def _draw(self, canvas, v: dict[int, float], status: str) -> None:
         canvas.delete("all")
 
-        # Head pose: HEADTURN pans the whole face, HEADNOD pitches it. 10 = head
-        # up / robot's left; the offsets below are the on-screen interpretation.
+        # Head pose: HEADTURN pans the whole face, HEADNOD pitches it, HEADTILT
+        # rolls it side to side (10 = tilted toward the robot's right). Roll is
+        # applied as a rotation about the head center to every shape below.
         cx = 200 + (v[joints.HEADTURN] - 5.0) / 5.0 * 30.0
         cy = 205 - (v[joints.HEADNOD] - 5.0) / 5.0 * 24.0
+        roll = math.radians((v[joints.HEADTILT] - 5.0) / 5.0 * _HEADTILT_DEG)
 
         # Base / neck (fixed to the desk, not the head)
         canvas.create_rectangle(150, 392, 250, 470, fill="#20262d", outline="")
         canvas.create_rectangle(120, 440, 280, 470, fill="#2a323b", outline="")
 
-        # Head shell
-        canvas.create_oval(cx - 115, cy - 135, cx + 115, cy + 135, fill=_HEAD, outline=_HEAD_EDGE, width=3)
+        # Head shell -- a polygon (not create_oval) so it can actually rotate.
+        canvas.create_polygon(
+            *_ellipse_points(cx, cy, 115, 135, roll, cx, cy),
+            fill=_HEAD, outline=_HEAD_EDGE, width=3, smooth=True,
+        )
 
         # Eyes
         eye_r = 32.0
         pupil_dx = -(v[joints.EYETURN] - 5.0) / 5.0 * 14.0
         pupil_dy = -(v[joints.EYETILT] - 5.0) / 5.0 * 10.0
-        # Lids close from the top; rest (5) and above = fully open.
-        lid_frac = max(0.0, min(1.0, (5.0 - v[joints.LIDBLINK]) / 5.0))
+        pupil_dx, pupil_dy = _rotate_pt(pupil_dx, pupil_dy, 0.0, 0.0, roll)
+        # Lids close from the top; 10 = fully open, 0 = fully closed.
+        lid_frac = max(0.0, min(1.0, (10.0 - v[joints.LIDBLINK]) / 10.0))
 
-        for ex in (cx - 50, cx + 50):
-            ey = cy - 42
+        for ex0, ey0 in ((cx - 50, cy - 42), (cx + 50, cy - 42)):
+            ex, ey = _rotate_pt(ex0, ey0, cx, cy, roll)
             canvas.create_oval(ex - eye_r, ey - eye_r, ex + eye_r, ey + eye_r,
                                fill=_EYE_WHITE, outline=_HEAD_EDGE, width=2)
             px, py = ex + pupil_dx, ey + pupil_dy
             canvas.create_oval(px - 11, py - 11, px + 11, py + 11, fill=_PUPIL, outline="")
             canvas.create_oval(px - 4, py - 6, px + 1, py - 1, fill="#dfe8ef", outline="")
             if lid_frac >= 0.98:
-                # Fully shut: paint the whole eye as lid.
+                # Fully shut: paint the whole eye as lid (still a circle -- rotation
+                # only moves its center, so create_oval is fine here).
                 canvas.create_oval(ex - eye_r, ey - eye_r, ex + eye_r, ey + eye_r,
                                    fill=_LID, outline=_HEAD_EDGE)
             elif lid_frac > 0.01:
-                # Lid: a cover sliding down over the eye from the top.
-                lid_y = ey - eye_r + lid_frac * 2 * eye_r
-                canvas.create_rectangle(ex - eye_r - 1, ey - eye_r - 1, ex + eye_r + 1, lid_y,
-                                        fill=_LID, outline="")
+                # Lid: a cover sliding down over the eye from the top, rolled with
+                # the head -- built from the eye's own unrotated corners so it stays
+                # square to the eye rather than the screen.
+                lid_y0 = ey0 - eye_r + lid_frac * 2 * eye_r
+                corners = (
+                    (ex0 - eye_r - 1, ey0 - eye_r - 1),
+                    (ex0 + eye_r + 1, ey0 - eye_r - 1),
+                    (ex0 + eye_r + 1, lid_y0),
+                    (ex0 - eye_r - 1, lid_y0),
+                )
+                flat = [c for corner in corners for c in _rotate_pt(*corner, cx, cy, roll)]
+                canvas.create_polygon(*flat, fill=_LID, outline="")
             canvas.create_oval(ex - eye_r, ey - eye_r, ex + eye_r, ey + eye_r,
                                outline=_HEAD_EDGE, width=2)
 
@@ -256,20 +300,25 @@ class FaceWindow:
         y_top = mouth_y - (v[joints.TOPLIP] - 5.0) * 6.0
         y_bot = mouth_y + (v[joints.BOTTOMLIP] - 5.0) * 6.0
         if y_bot - y_top > 2.0:
-            canvas.create_oval(cx - half_w, y_top, cx + half_w, y_bot, fill=_MOUTH, outline="")
-            canvas.create_line(cx - half_w, y_top + 1, cx + half_w, y_top + 1,
-                               fill=_LIP, width=5, smooth=True)
-            canvas.create_line(cx - half_w, y_bot - 1, cx + half_w, y_bot - 1,
-                               fill=_LIP, width=6, smooth=True)
+            canvas.create_polygon(
+                *_ellipse_points(cx, (y_top + y_bot) / 2.0, half_w, (y_bot - y_top) / 2.0,
+                                 roll, cx, cy),
+                fill=_MOUTH, outline="",
+            )
+            top_pts = [c for pt in ((cx - half_w, y_top + 1), (cx + half_w, y_top + 1))
+                       for c in _rotate_pt(*pt, cx, cy, roll)]
+            canvas.create_line(*top_pts, fill=_LIP, width=5, smooth=True)
+            bot_pts = [c for pt in ((cx - half_w, y_bot - 1), (cx + half_w, y_bot - 1))
+                       for c in _rotate_pt(*pt, cx, cy, roll)]
+            canvas.create_line(*bot_pts, fill=_LIP, width=6, smooth=True)
         else:
             # Closed: one line whose slight bend hints at the emotion offsets
             # (lips pushed up = smile, pushed down = frown).
             bend = (v[joints.TOPLIP] + v[joints.BOTTOMLIP]) / 2.0 - 5.0
             mid_y = (y_top + y_bot) / 2.0
-            canvas.create_line(
-                cx - half_w, mid_y, cx, mid_y + bend * 4.0, cx + half_w, mid_y,
-                fill=_LIP, width=6, smooth=True,
-            )
+            pts = ((cx - half_w, mid_y), (cx, mid_y + bend * 4.0), (cx + half_w, mid_y))
+            flat = [c for pt in pts for c in _rotate_pt(*pt, cx, cy, roll)]
+            canvas.create_line(*flat, fill=_LIP, width=6, smooth=True)
 
         # Joint readout
         for i, j in enumerate(joints.ALL_JOINTS):

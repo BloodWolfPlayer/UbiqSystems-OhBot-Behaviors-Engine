@@ -49,7 +49,7 @@ public partial class EmotionOptionViewModel : ObservableObject
 }
 
 /// <summary>
-/// Manual motor control: jog each of the seven joints with a slider and watch its live
+/// Manual motor control: jog each of the eight joints with a slider and watch its live
 /// position, for testing/calibrating the servos without going through a conversation.
 /// "Enable" snapshots every joint at its current pose and holds it there (no jump); each
 /// slider drag then overrides that joint in the engine's motor mixer — ambient behaviors
@@ -72,6 +72,7 @@ public partial class ManualControlViewModel : ObservableObject
         ("TopLip", "Top lip"),
         ("BottomLip", "Bottom lip"),
         ("EyeTilt", "Eye tilt"),
+        ("HeadTilt", "Head tilt"),
     };
 
     private readonly EngineApi _api;
