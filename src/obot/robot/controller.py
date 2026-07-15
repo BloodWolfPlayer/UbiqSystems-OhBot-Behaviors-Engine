@@ -274,6 +274,9 @@ class AnimatedObotController(ObotController):
                     #* joint, bypassing offset/lip blending entirely.
                     targets[j] = pose_overrides[j]
                 else:
+                    if counts[j] == 0:
+                        counts[j] = 1
+
                     targets[j] = joints.REST_POSITION + sums[j] / counts[j]
 
             #* Speech lips ride on top of whatever the offsets decided (an emotion
