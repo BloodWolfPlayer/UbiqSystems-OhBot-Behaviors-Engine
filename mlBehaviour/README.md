@@ -70,12 +70,31 @@ Useful flags for quick iteration:
 - `--n-mels`, `--conv-channels`, `--gru-hidden` -- model size knobs, all small by default
 - `--device cpu` / `--device cuda` -- override auto-detection
 
-## What's NOT covered yet (next steps once this works)
+## Step 3: run a checkpoint live on the Ohbot
 
-- An inference script that takes a new `.wav`, runs the model, and turns
-  the (T, 7) output into real `ohbot.move()` calls at the right control
-  rate -- happy to write this once you've confirmed training works.
+Inference and servo driving live in the main app (`src/obot/ml/`), not here --
+`mlBehaviour/` stays training-only. It loads this directory's `model.py` /
+`features.py` directly (via importlib, not a copy) so it can never drift from
+whatever a checkpoint was actually trained with.
+
+```bash
+pip install -r requirements/ml.txt   # adds torch/scipy/soundfile on top of the base app
+python -m obot.ml mlBehaviour/training_run/best_model.pt path/to/clip.wav --sim
+python -m obot.ml mlBehaviour/training_run/best_model.pt path/to/clip.wav          # real hardware
+```
+
+This predicts a pose per control-rate frame, plays the wav, and drives the
+robot's servos directly frame-by-frame via `ObotController.drive_pose()` /
+`release_pose()` (in `src/obot/robot/controller.py`) -- new endpoints that
+bypass the offset/lip mixer and set an absolute joint target instead, still
+slew-limited by the same motor mixer thread everything else uses.
+
+## What's NOT covered yet (next steps)
+
 - Scaling up model size/data once the small model verifies the pipeline.
 - Proper train/val/test splits by *speaker* (not just by clip) if you want
   to test generalization to a held-out voice, since BEAT2 clips from the
   same speaker will otherwise leak into both splits.
+- Wiring AI-predicted gesture into the live chat pipeline itself (right now
+  `python -m obot.ml` runs standalone against a wav file, independent of
+  `RobotPipeline`/TTS).

@@ -51,6 +51,13 @@
       "bottom_max_delta": 5.0,
       "sync_offset_s": 0.0
     },
+    "gesture": {
+      "enabled": false,
+      "checkpoint_path": "",
+      "control_hz": 20.0,
+      "device": "cpu",
+      "intensity": 1.0
+    },
     "output_device_index": null,
     "word_stop_pad_s": 0.06,
     "estimate_wpm": 160.0

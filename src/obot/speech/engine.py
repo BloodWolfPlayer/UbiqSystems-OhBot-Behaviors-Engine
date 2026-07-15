@@ -15,18 +15,23 @@ For every sentence it:
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from ..core.models import SpeechMarker
-from .config import SpeechSettings
+from .config import AIGestureSettings, SpeechSettings
 from .player import AudioPlayer, PlaybackError
 from .timeline import MouthTrack, SpeechTimeline, build_mouth_track, build_timeline
 from .tts import TTSError, build_tts
 
+if TYPE_CHECKING:
+    from ..ml.inference import GestureModel, GesturePrediction
+
 MouthSink = Callable[[float, float], None]  # (top_delta, bottom_delta) above rest
+PoseSink = Callable[[Mapping[str, float]], None]  # {axis_name: absolute position 0..10}
 MarkerCallback = Callable[[SpeechMarker], Awaitable[None]]
 
 
@@ -38,6 +43,9 @@ class SpeechClip:
     timeline: SpeechTimeline
     mouth: MouthTrack
     engine_name: str
+    #* None unless speech.gesture.enabled and the model loaded/predicted successfully --
+    #* when present, speak() drives pose_sink from this instead of the envelope mouth track.
+    pose: "GesturePrediction | None" = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +71,34 @@ class SpeechEngine:
         #* At most two synth calls in flight: the sentence about to play and the next.
         self._synth_sem = asyncio.Semaphore(2)
         self._stop_requested = False
+        self._gesture_model = self._build_gesture_model(settings.gesture)
+
+    @staticmethod
+    def _build_gesture_model(settings: AIGestureSettings) -> "GestureModel | None":
+        if not settings.enabled or not settings.checkpoint_path:
+            return None
+        try:
+            #* torch is heavy and optional -- only imported when gesture driving is on.
+            from ..ml.inference import GestureModel
+
+            return GestureModel(settings.checkpoint_path, device=settings.device)
+        except Exception as exc:  # noqa: BLE001 - any load failure just disables the feature
+            print(f"[speech] AI gesture model unavailable ({exc}); using the scripted mouth track.")
+            return None
+
+    def _predict_pose(self, samples: np.ndarray, sample_rate: int) -> "GesturePrediction | None":
+        if self._gesture_model is None:
+            return None
+        try:
+            audio = samples.astype(np.float32) / 32768.0
+            return self._gesture_model.predict(
+                audio, sample_rate,
+                control_hz=self.settings.gesture.control_hz,
+                intensity=self.settings.gesture.intensity,
+            )
+        except Exception as exc:  # noqa: BLE001 - fall back to the mouth track for this sentence
+            print(f"[speech] AI gesture prediction failed ({exc}); using the scripted mouth track.")
+            return None
 
     # -- synthesis --------------------------------------------------------------------
 
@@ -98,6 +134,7 @@ class SpeechEngine:
             sample_rate=result.sample_rate,
             timeline=build_timeline(text, result.samples, result.sample_rate),
             mouth=build_mouth_track(result.samples, result.sample_rate, self.settings.mouth),
+            pose=self._predict_pose(result.samples, result.sample_rate),
             engine_name=result.engine,
         )
 
@@ -115,6 +152,7 @@ class SpeechEngine:
         markers: Sequence[SpeechMarker] = (),
         on_marker: MarkerCallback | None = None,
         mouth_sink: MouthSink | None = None,
+        pose_sink: PoseSink | None = None,
     ) -> SpeakResult:
         """Speak one sentence. Raises TTSError/PlaybackError if audio is impossible."""
         self._stop_requested = False
@@ -154,7 +192,16 @@ class SpeechEngine:
                         fired.append(asyncio.create_task(on_marker(marker)))
                     next_marker += 1
 
-                if mouth_sink is not None:
+                #* An AI-predicted pose for this clip takes over the whole face/head --
+                #* driving both it and the envelope mouth track would just have them
+                #* fight over the lips, so the envelope track only runs as a fallback.
+                if clip.pose is not None and pose_sink is not None:
+                    frame = min(
+                        clip.pose.motion.shape[0] - 1,
+                        max(0, int(t * clip.pose.control_hz)),
+                    )
+                    pose_sink(dict(zip(clip.pose.axis_names, clip.pose.motion[frame].tolist())))
+                elif mouth_sink is not None:
                     openness = clip.mouth.openness_at(t + mouth_cfg.sync_offset_s)
                     mouth_sink(
                         min(openness * mouth_cfg.top_gain, mouth_cfg.top_max_delta),

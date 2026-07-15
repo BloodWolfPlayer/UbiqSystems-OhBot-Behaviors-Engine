@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 from ..core.models import SpeechMarker
@@ -103,6 +103,23 @@ class ObotController(ABC):
         del joint_id, delta, duration_s
         return False
 
+    def drive_pose(self, positions: Mapping[int, float]) -> bool:
+        """Directly set absolute joint targets (0..10), e.g. one frame of an
+        AI-predicted pose. Overrides offsets/lips for exactly the joints given,
+        until :meth:`release_pose` hands them back. Returns False when there
+        are no servos to drive.
+
+        This is the hook an audio-driven gesture model uses to speak straight
+        to the motor mixer instead of going through discrete actions/emotions.
+        """
+        del positions
+        return False
+
+    def release_pose(self, joint_ids: Iterable[int] | None = None) -> None:
+        """Stop directly driving the given joints (or all, if None); motion
+        returns to the offset/lips mixer."""
+        del joint_ids
+
     async def stop_speaking(self) -> None:
         """Stop current speech at the next word boundary. Override to actually halt TTS."""
 
@@ -140,6 +157,11 @@ class AnimatedObotController(ObotController):
         #* (top_delta, bottom_delta) written by the speech engine's mouth sink;
         #* read by the mixer thread. Replaced atomically as a tuple.
         self._lips: tuple[float, float] = (0.0, 0.0)
+        #* Absolute joint targets from drive_pose() (e.g. an AI gesture model),
+        #* keyed by joint id. Present joints skip offset/lip blending entirely
+        #* in the mixer and use this value as their target instead.
+        self._pose_overrides: dict[int, float] = {}
+        self._pose_lock = threading.Lock()
         self._speech_stopped = threading.Event()
         self._stop_event = threading.Event()
 
@@ -159,6 +181,19 @@ class AnimatedObotController(ObotController):
                 MotionOffset(joint_id=joint_id, delta=delta, duration_s=duration_s)
             )
         return True
+
+    def drive_pose(self, positions: Mapping[int, float]) -> bool:
+        with self._pose_lock:
+            self._pose_overrides.update(positions)
+        return True
+
+    def release_pose(self, joint_ids: Iterable[int] | None = None) -> None:
+        with self._pose_lock:
+            if joint_ids is None:
+                self._pose_overrides.clear()
+            else:
+                for j in joint_ids:
+                    self._pose_overrides.pop(j, None)
 
     def _mixer_loop(self) -> None:
         """Blend offsets + speech lips into joint targets and chase them at a bounded rate."""
@@ -186,14 +221,25 @@ class AnimatedObotController(ObotController):
                 for req in expired:
                     self._offset_requests.remove(req)
 
+            with self._pose_lock:
+                pose_overrides = dict(self._pose_overrides) if self._pose_overrides else None
+
             for j in joints.ALL_JOINTS:
-                targets[j] = joints.REST_POSITION + sums[j] / counts[j]
+                if pose_overrides is not None and j in pose_overrides:
+                    #* An AI-predicted pose speaks straight to the servo for this
+                    #* joint, bypassing offset/lip blending entirely.
+                    targets[j] = pose_overrides[j]
+                else:
+                    targets[j] = joints.REST_POSITION + sums[j] / counts[j]
 
             #* Speech lips ride on top of whatever the offsets decided (an emotion
-            #* can hold the mouth corners while the visemes open/close it).
+            #* can hold the mouth corners while the visemes open/close it) --
+            #* unless a pose override already owns that joint.
             lip_top, lip_bottom = self._lips
-            targets[joints.TOPLIP] += lip_top
-            targets[joints.BOTTOMLIP] += lip_bottom
+            if pose_overrides is None or joints.TOPLIP not in pose_overrides:
+                targets[joints.TOPLIP] += lip_top
+            if pose_overrides is None or joints.BOTTOMLIP not in pose_overrides:
+                targets[joints.BOTTOMLIP] += lip_bottom
 
             for j in joints.ALL_JOINTS:
                 target = min(10.0, max(0.0, targets[j]))
@@ -219,6 +265,16 @@ class AnimatedObotController(ObotController):
     def _set_lips(self, top_delta: float, bottom_delta: float) -> None:
         self._lips = (top_delta, bottom_delta)
 
+    def _set_pose(self, positions: Mapping[str, float]) -> None:
+        """pose_sink for the speech engine's AI gesture model: axis names -> joint ids."""
+        from ..ml.inference import AXIS_TO_JOINT  # torch already loaded once gesture mode is on
+
+        joint_positions = {
+            AXIS_TO_JOINT[name]: value for name, value in positions.items() if name in AXIS_TO_JOINT
+        }
+        if joint_positions:
+            self.drive_pose(joint_positions)
+
     def prepare_sentence(self, sentence: str) -> None:
         if any(ch.isalnum() for ch in sentence):
             self.speech.prepare(sentence)
@@ -242,7 +298,8 @@ class AnimatedObotController(ObotController):
 
         try:
             result = await self.speech.speak(
-                sentence, markers=markers, on_marker=on_marker, mouth_sink=self._set_lips
+                sentence, markers=markers, on_marker=on_marker,
+                mouth_sink=self._set_lips, pose_sink=self._set_pose,
             )
             if not result.completed:
                 print("[speech] (cut off at word boundary)")
@@ -251,6 +308,10 @@ class AnimatedObotController(ObotController):
             #* so sentences, interrupts and turn-taking still behave sensibly.
             print(f"[speech] audio unavailable ({exc}); simulating timing.")
             await self._simulate_sentence(sentence, markers, on_marker)
+        finally:
+            #* Hand any AI-driven joints back to the offset/lips mixer; harmless
+            #* no-op if this sentence never used drive_pose().
+            self.release_pose()
 
     async def _simulate_sentence(
         self,

@@ -114,9 +114,33 @@ class TTSSettings:
 
 
 @dataclass
+class AIGestureSettings:
+    """Optional: drive head/eyes/lids/lips from the BEAT2-trained audio model
+    instead of the scripted RMS-envelope mouth track. Disabled by default --
+    the checkpoint is a small, still-training model, and torch is only
+    imported (see speech/engine.py) when this is turned on.
+    """
+
+    enabled: bool = False
+    #* Path to a train.py checkpoint, e.g. mlBehaviour/training_run/best_model.pt.
+    checkpoint_path: str = ""
+    #* Must match the --control-hz the checkpoint was trained with (beat2_to_ohbot.py).
+    control_hz: float = 20.0
+    device: str = "cpu"  # torch device for inference: "cpu" or "cuda"
+    #* Scales predicted movement around rest position: 1.0 = model output
+    #* unchanged, >1 exaggerates the gestures, <1 dampens them.
+    intensity: float = 1.0
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "AIGestureSettings":
+        return _from_dict(cls, data)
+
+
+@dataclass
 class SpeechSettings:
     tts: TTSSettings = field(default_factory=TTSSettings)
     mouth: MouthSettings = field(default_factory=MouthSettings)
+    gesture: AIGestureSettings = field(default_factory=AIGestureSettings)
     #* sounddevice output device index; None = system default speakers.
     output_device_index: int | None = None
     #* When interrupted, playback runs to the end of the current word plus this pad.
@@ -131,6 +155,7 @@ class SpeechSettings:
         return cls(
             tts=TTSSettings.from_dict(data.get("tts")),
             mouth=MouthSettings.from_dict(data.get("mouth")),
+            gesture=AIGestureSettings.from_dict(data.get("gesture")),
             output_device_index=int(device) if device is not None else None,
             word_stop_pad_s=float(data.get("word_stop_pad_s", cls.word_stop_pad_s)),
             estimate_wpm=float(data.get("estimate_wpm", cls.estimate_wpm)),
