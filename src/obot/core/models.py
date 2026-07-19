@@ -12,7 +12,7 @@ class InterruptionResult:
 
     ``spoken`` holds the sentences that were actually voiced (the sentence that was
     in progress when the cut happened counts as spoken). ``unspoken`` holds every
-    sentence the LLM generated after that point — "the rest it would have said".
+    sentence the LLM generated after that point  "the rest it would have said".
     When ``interrupted`` is ``False`` the turn finished normally and ``unspoken`` is
     empty.
     """

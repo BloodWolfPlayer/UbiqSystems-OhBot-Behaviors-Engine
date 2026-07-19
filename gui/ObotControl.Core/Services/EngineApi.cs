@@ -74,7 +74,7 @@ public sealed class EngineApi
     public async Task<List<string>> ListEmotionsAsync() =>
         (await _client.CallAsync<EmotionList>("list_emotions").ConfigureAwait(false))!.Emotions;
 
-    /// <summary>Apply an emotion's default mouth/eyes/nod pose — the same path the LLM's
+    /// <summary>Apply an emotion's default mouth/eyes/nod pose  the same path the LLM's
     /// (Emotion) markers use. Persists until the next call. Needs an active session.</summary>
     public Task SetEmotionAsync(string emotion) => _client.CallAsync("set_emotion", new { emotion });
 

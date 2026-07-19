@@ -61,8 +61,8 @@ class ObotController(ABC):
     """Robot-facing commands live here."""
 
     # Name of the last emotion whose pose was actually recognised (see
-    # emotions.resolve); a plain class attribute so every controller — including
-    # motor-less ConsoleObotController — has a sensible default without its own
+    # emotions.resolve); a plain class attribute so every controller  including
+    # motor-less ConsoleObotController  has a sensible default without its own
     # __init__. Subclasses set an instance attribute of the same name on change.
     current_emotion: str = "Neutral"
 
@@ -151,11 +151,11 @@ class AnimatedObotController(ObotController):
 
     Owns two cooperating pieces:
 
-    * the **motor mixer** — a thread that every ``tick_s`` blends all active
+    * the **motor mixer**  a thread that every ``tick_s`` blends all active
       motion offsets plus the live lip position from speech, applies slew-rate
       limiting so joints travel at a bounded speed instead of snapping, and
       writes only joints that actually changed;
-    * the **speech engine** — the custom say(): TTS (Gemini/local), playback,
+    * the **speech engine**  the custom say(): TTS (Gemini/local), playback,
       mouth animation, word-timed markers, and word-boundary interruption.
 
     Subclasses implement :meth:`_write_motor` (serial servo write / sim canvas).
@@ -185,9 +185,9 @@ class AnimatedObotController(ObotController):
         # panel. Wins over offsets/lips for that joint until explicitly released.
         self._manual_overrides: dict[int, float] = {}
         self._manual_lock = threading.Lock()
-        #* Absolute joint targets from drive_pose() (e.g. an AI gesture model),
-        #* keyed by joint id. Present joints skip offset/lip blending entirely
-        #* in the mixer and use this value as their target instead.
+        # Absolute joint targets from drive_pose() (e.g. an AI gesture model),
+        # keyed by joint id. Present joints skip offset/lip blending entirely
+        # in the mixer and use this value as their target instead.
         self._pose_overrides: dict[int, float] = {}
         self._pose_lock = threading.Lock()
         self._speech_stopped = threading.Event()
@@ -270,8 +270,8 @@ class AnimatedObotController(ObotController):
 
             for j in joints.ALL_JOINTS:
                 if pose_overrides is not None and j in pose_overrides:
-                    #* An AI-predicted pose speaks straight to the servo for this
-                    #* joint, bypassing offset/lip blending entirely.
+                    # An AI-predicted pose speaks straight to the servo for this
+                    # joint, bypassing offset/lip blending entirely.
                     targets[j] = pose_overrides[j]
                 else:
                     if counts[j] == 0:
@@ -279,9 +279,9 @@ class AnimatedObotController(ObotController):
 
                     targets[j] = joints.REST_POSITION + sums[j] / counts[j]
 
-            #* Speech lips ride on top of whatever the offsets decided (an emotion
-            #* can hold the mouth corners while the visemes open/close it) --
-            #* unless a pose override already owns that joint.
+            # Speech lips ride on top of whatever the offsets decided (an emotion
+            # can hold the mouth corners while the visemes open/close it) --
+            # unless a pose override already owns that joint.
             lip_top, lip_bottom = self._lips
             if pose_overrides is None or joints.TOPLIP not in pose_overrides:
                 targets[joints.TOPLIP] += lip_top
@@ -306,7 +306,7 @@ class AnimatedObotController(ObotController):
                 target = min(10.0, max(0.0, targets[j]))
                 # Slew-rate limiting: travel toward the target at a bounded
                 # positions-per-second speed so motion is smooth, not snappy.
-                # Lips and lids use a much higher rate — visemes and blinks
+                # Lips and lids use a much higher rate  visemes and blinks
                 # have to hit their pose within a frame or two.
                 rate = (
                     self.motion.lip_rate_limit
@@ -419,8 +419,8 @@ class AnimatedObotController(ObotController):
             await self._simulate_sentence(sentence, markers, on_marker)
             events.emit(events.SPEECH, {"text": sentence, "event": "done", "engine": None})
         finally:
-            #* Hand any AI-driven joints back to the offset/lips mixer; harmless
-            #* no-op if this sentence never used drive_pose().
+            # Hand any AI-driven joints back to the offset/lips mixer; harmless
+            # no-op if this sentence never used drive_pose().
             self.release_pose()
 
     async def _simulate_sentence(
@@ -502,7 +502,7 @@ class AnimatedObotController(ObotController):
 
     async def wink(self) -> None:
         # Obot has a single shared lid servo, so a wink is rendered as a quick,
-        # snappier blink — the closest the hardware can manage.
+        # snappier blink  the closest the hardware can manage.
         print("[action] wink")
         events.emit(events.ACTION, {"name": "wink"})
         self.enqueue_offset(joints.LIDBLINK, -10.0, 0.2)
@@ -584,7 +584,7 @@ class SimulatedObotController(AnimatedObotController):
     """Digital twin: identical motion/speech pipeline, rendered in the sim window.
 
     Everything (mixer, speech, lips, behaviors) behaves exactly like the
-    hardware controller — only :meth:`_write_motor` differs, painting a tkinter
+    hardware controller  only :meth:`_write_motor` differs, painting a tkinter
     face instead of writing servo serial commands. Audio still plays on the
     host speakers, so lip-sync and interruption can be tested without a robot.
     """
@@ -619,8 +619,8 @@ class SimulatedObotController(AnimatedObotController):
 class VirtualObotController(AnimatedObotController):
     """Headless twin: the full motor mixer + speech pipeline with no on-host window.
 
-    Identical to :class:`SimulatedObotController` in every way that matters — mixer,
-    slew limiting, real TTS audio on the host speakers, lip-sync, behaviors — but it
+    Identical to :class:`SimulatedObotController` in every way that matters  mixer,
+    slew limiting, real TTS audio on the host speakers, lip-sync, behaviors  but it
     renders nowhere. The joint positions are streamed on the ``joints`` event topic
     instead, so a remote GUI can draw the face itself (``--serve`` + face preview).
     This is the sensible controller for the control server on a machine without the
@@ -636,7 +636,7 @@ class VirtualObotController(AnimatedObotController):
 class ConsoleObotController(ObotController):
     """Hardware-free controller: prints what the robot *would* do and simulates timing.
 
-    This is the reusable "run the whole program without an Obot" path — it needs no
+    This is the reusable "run the whole program without an Obot" path  it needs no
     ohbot library, no servos, and no audio output, so the full pipeline (LLM
     streaming, the processor, interruption, and microphone input) can be exercised
     on a plain dev machine. Speech "playback" is modelled as a short sleep, and
@@ -647,7 +647,7 @@ class ConsoleObotController(ObotController):
     def __init__(self) -> None:
         super().__init__()
         # Tripped by stop_speaking so an in-flight simulated utterance ends early and a
-        # still-queued one is skipped — the same semantics as the hardware controller.
+        # still-queued one is skipped  the same semantics as the hardware controller.
         self._speech_stopped = threading.Event()
 
     async def speak_sentence(

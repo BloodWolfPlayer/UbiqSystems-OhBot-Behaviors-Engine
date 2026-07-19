@@ -8,7 +8,7 @@ namespace ObotControl.Core.Tests;
 
 /// <summary>
 /// End-to-end: drive the real C# <see cref="EngineClient"/> against a real
-/// <c>python -m obot --serve</c> process — the client mirror of the Python smoke test.
+/// <c>python -m obot --serve</c> process  the client mirror of the Python smoke test.
 /// Proves the whole GUI transport stack (WebSocket, RPC correlation, event fan-out)
 /// works against the live engine. Skips cleanly on a machine without the venv Python.
 /// </summary>
@@ -31,7 +31,7 @@ public class EngineIntegrationTests
         var python = EngineProcess.VenvPython(repoRoot!);
         if (python is null)
         {
-            // No bundled interpreter on this machine — nothing to integrate against.
+            // No bundled interpreter on this machine  nothing to integrate against.
             return; // treated as passing/skipped
         }
 

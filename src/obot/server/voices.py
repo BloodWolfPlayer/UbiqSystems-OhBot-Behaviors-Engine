@@ -58,7 +58,7 @@ KOKORO_VOICES = [
     "am_adam", "am_michael", "am_liam", "am_onyx",
 ]
 
-# gTTS has no named voices — the "voice" is the Google endpoint TLD, which sets the accent.
+# gTTS has no named voices  the "voice" is the Google endpoint TLD, which sets the accent.
 GTTS_ACCENTS = ["co.uk", "com", "com.au", "ca", "co.in", "ie", "co.za"]
 
 

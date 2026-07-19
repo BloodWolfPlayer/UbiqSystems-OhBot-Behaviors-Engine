@@ -19,7 +19,7 @@ public sealed class EngineLaunchOptions
 /// <summary>
 /// Spawns and owns a <c>python -m obot --serve</c> child process, streams its stdout/stderr
 /// to the log pane, and guarantees the whole process tree is killed when the GUI exits
-/// (the engine must run from the repo root — ohbot lib + ohbotData/ are CWD-relative).
+/// (the engine must run from the repo root  ohbot lib + ohbotData/ are CWD-relative).
 /// </summary>
 public sealed class EngineProcess : IDisposable
 {
@@ -34,7 +34,7 @@ public sealed class EngineProcess : IDisposable
     public bool IsRunning => _process is { HasExited: false };
     public Uri Endpoint => new($"ws://{_options.Host}:{_options.Port}");
 
-    /// <summary>True if stdout/stderr contained a "port already in use" bind failure —
+    /// <summary>True if stdout/stderr contained a "port already in use" bind failure 
     /// i.e. some other engine (stray or otherwise) is already listening on this address,
     /// so a nonzero exit here doesn't mean the engine itself is broken.</summary>
     public bool ObservedAddressInUse { get; private set; }

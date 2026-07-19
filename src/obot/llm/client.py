@@ -60,5 +60,5 @@ class ScriptedLLMClient:
             yield self.response_text[index : index + self.chunk_size]
 
     def register_interruption(self, spoken: list[str], unspoken: list[str]) -> None:
-        # Stateless replay source — nothing to remember between turns.
+        # Stateless replay source  nothing to remember between turns.
         del spoken, unspoken

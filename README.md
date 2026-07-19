@@ -1,6 +1,6 @@
 # UbiqSystems-OhBot-Behaviors-Engine
 
-The behaviour engine for our OhBot robot ("Ms. Mimic"). It streams LLM responses, parses inline action/emotion markers, and drives speech and servo motion in real time — with a [desktop GUI](#desktop-gui) over the top for setup, configuration and live conversations.
+The behaviour engine for our OhBot robot ("Ms. Mimic"). It streams LLM responses, parses inline action/emotion markers, and drives speech and servo motion in real time  with a [desktop GUI](#desktop-gui) over the top for setup, configuration and live conversations.
 
 ## Design
 
@@ -11,7 +11,7 @@ The system splits into six layers:
 3. **Action registry**: maps action names to dedicated robot motion functions.
 4. **Speech engine** (`obot.speech`): our replacement for `ohbot.say()`. Synthesizes each sentence (Gemini TTS or a local offline voice), plays it back interruptibly, animates the lips from the real audio, and fires `[Action]`/`(Emotion)` markers at the exact word they were written on.
 5. **Behavior modules** (`obot.robot.behaviors`): ambient life, blinking, nodding along while you talk to it, subtle sway while speaking, idle eye wandering.
-6. **Obot controller**: owns the motor mixer and hardware-facing commands. Four implementations: `HardwareObotController` (real servos via the `ohbot` library), `SimulatedObotController` (the digital OhBot window), `VirtualObotController` (headless — full mixer and TTS, joints streamed to the GUI's face preview), and `ConsoleObotController` (prints what the robot would do).
+6. **Obot controller**: owns the motor mixer and hardware-facing commands. Four implementations: `HardwareObotController` (real servos via the `ohbot` library), `SimulatedObotController` (the digital OhBot window), `VirtualObotController` (headless  full mixer and TTS, joints streamed to the GUI's face preview), and `ConsoleObotController` (prints what the robot would do).
 
 ## Data Flow
 
@@ -69,15 +69,19 @@ Then install the dependencies for your platform:
 | Windows (dev/testing) | `pip install -r requirements/windows.txt` |
 | Linux (dev/testing) | `pip install -r requirements/linux.txt` |
 | Raspberry Pi (deployment) | `pip install -r requirements/pi.txt` |
+| + AI gesture model (optional, any platform) | `pip install -r requirements/ml.txt` |
 
-> **Linux note:** `sounddevice` and `pyttsx3` need system packages first:
+> **Linux note:** `sounddevice` and `pyttsx3` need system libraries first:
 > ```bash
-> sudo apt install portaudio19-dev espeak
+> sudo apt install libportaudio2 espeak-ng
 > ```
+> Optional: `python3-tk` for the `--sim` face window, `python3.12-venv` if you create the
+> venv from the system Python, and `sudo usermod -aG dialout $USER` (then re-login) for
+> serial access to the real robot.
 
-> **Python version:** Use **Python 3.12**. Pre-built wheels for `sounddevice`, `vosk`, and other heavy deps are available for 3.12 on both Windows and Linux. Python 3.13+ isn't fully supported by the audio stack yet and gives mixed results.
+> **Python version:** Use **Python 3.12**. Pre-built wheels for `sounddevice`, `vosk`, and other heavy deps are available for 3.12 on both Windows and Linux. Python 3.13+ isn't fully supported by the audio stack yet and gives mixed results. On distros that ship a newer Python (Ubuntu 25+), let the GUI's automatic setup download a private 3.12 instead.
 
-**On Windows you can skip all of this.** The [desktop GUI](#desktop-gui) sets Python up for you, no terminal required. See below.
+**On Windows and Linux you can skip all of this.** The [desktop GUI](#desktop-gui) sets Python up for you, no terminal required (the two `apt` packages above are still needed for audio on Linux). See below.
 
 ### 2. Configure
 
@@ -170,7 +174,7 @@ python -m obot --console
 
 Three entry points, each runnable with `python -m <module> --help`.
 
-### `python -m obot` — the full chat pipeline
+### `python -m obot`  the full chat pipeline
 
 ```bash
 python -m obot [--text "..."] [--chunk-size N] [--console] [--sim]
@@ -178,14 +182,14 @@ python -m obot [--text "..."] [--chunk-size N] [--console] [--sim]
 
 | Flag | Default | What it does |
 |---|---|---|
-| `--text "..."` | — | Skip the interactive backend picker and voice session entirely: run the scripted demo once with this exact text, then exit. No API key, config.json, or microphone needed. |
-| `--chunk-size N` | `24` | Characters per chunk fed to the `StreamProcessor` by the scripted LLM source (only relevant with `--text`) — smaller values exercise streaming/token-boundary edge cases harder. |
+| `--text "..."` |  | Skip the interactive backend picker and voice session entirely: run the scripted demo once with this exact text, then exit. No API key, config.json, or microphone needed. |
+| `--chunk-size N` | `24` | Characters per chunk fed to the `StreamProcessor` by the scripted LLM source (only relevant with `--text`)  smaller values exercise streaming/token-boundary edge cases harder. |
 | `--console` | off | Force `ConsoleObotController`: prints what the robot *would* do, needs no `ohbot` library, servos, or audio device. |
 | `--sim` | off | Use the digital OhBot (simulator window) instead of real hardware. See [Running without the robot](#running-without-the-robot). |
 
-With no flags, `python -m obot` prompts for a backend (Gemini / remote Ollama / scripted demo / example script) and starts the full voice session — see [Session controls](#session-controls) and [Microphone input](#microphone-input).
+With no flags, `python -m obot` prompts for a backend (Gemini / remote Ollama / scripted demo / example script) and starts the full voice session  see [Session controls](#session-controls) and [Microphone input](#microphone-input).
 
-### `python -m obot.sim` — standalone speech/motion test bench
+### `python -m obot.sim`  standalone speech/motion test bench
 
 ```bash
 python -m obot.sim [--text "..."] [--no-tuning]
@@ -193,12 +197,12 @@ python -m obot.sim [--text "..."] [--no-tuning]
 
 | Flag | Default | What it does |
 |---|---|---|
-| `--text "..."` | — | Speak this once at startup (tags like `[Nod]`/`(Happy)`/`!Delay500` work), then drop into the interactive prompt. |
+| `--text "..."` |  | Speak this once at startup (tags like `[Nod]`/`(Happy)`/`!Delay500` work), then drop into the interactive prompt. |
 | `--no-tuning` | off | Hide the mouth-tuning sliders and "Save to config.json" button in the simulator window. |
 
-No LLM backend involved — type sentences directly at the prompt. See [Running without the robot](#running-without-the-robot).
+No LLM backend involved  type sentences directly at the prompt. See [Running without the robot](#running-without-the-robot).
 
-### `python -m obot.ml` — AI gesture model runner
+### `python -m obot.ml`  AI gesture model runner
 
 Drives the Ohbot straight from the BEAT2-trained audio model, independent of the chat pipeline. See [mlBehaviour/README.md](mlBehaviour/README.md) for the training side.
 
@@ -208,15 +212,15 @@ python -m obot.ml <checkpoint> <wav> [--control-hz HZ] [--device cpu|cuda] [--in
 
 | Flag | Default | What it does |
 |---|---|---|
-| `checkpoint` (positional) | — | Path to a `train.py` checkpoint, e.g. `mlBehaviour/training_run/best_model.pt`. |
-| `wav` (positional) | — | Audio file to play and gesture along to. |
+| `checkpoint` (positional) |  | Path to a `train.py` checkpoint, e.g. `mlBehaviour/training_run/best_model.pt`. |
+| `wav` (positional) |  | Audio file to play and gesture along to. |
 | `--control-hz` | `20.0` | Must match the `--control-hz` the checkpoint was trained with (`beat2_to_ohbot.py`). |
 | `--device` | `cpu` | torch device for inference: `cpu` or `cuda`. |
 | `--intensity` | `1.0` | Scales predicted movement around rest position: `>1` exaggerates the gestures, `<1` dampens them. Same knob as `config.json → speech.gesture.intensity` (used when the AI model drives the live chat pipeline instead of a standalone wav). |
 | `--console` | off | Force the hardware-free console controller. |
 | `--sim` | off | Use the digital OhBot simulator window. |
 
-Needs `pip install -r requirements/ml.txt` (adds torch/scipy/soundfile on top of the base app) — not required unless you're using this or training in `mlBehaviour/`.
+Needs `pip install -r requirements/ml.txt` (adds torch/scipy/soundfile on top of the base app)  not required unless you're using this or training in `mlBehaviour/`.
 
 ---
 
@@ -303,7 +307,7 @@ It will acknowledge the interruption naturally rather than repeating itself.
 
 There's a desktop GUI for the whole workflow (setup, config, live conversation) in [gui/](gui/): a single **Avalonia** app (`ObotControl.App`) that runs natively on Windows, Linux and the Pi, sitting as a thin client over the shared `ObotControl.Core` (full details in [gui/README.md](gui/README.md)).
 
-On Windows, the GUI can also set Python up for you. No venv to create, no `pip install`, no terminal at all. (I call it Baby Mode) It finds an existing environment if you already have one, or downloads and installs a private Python and builds one for you if you don't. Quick start:
+On Windows and Linux, the GUI can also set Python up for you. No venv to create, no `pip install`, no terminal at all. (I call it Baby Mode) It finds an existing environment if you already have one, or downloads a private Python 3.12 and builds one for you if you don't (the python.org installer on Windows, a python-build-standalone tarball on Linux  so it works even on Ubuntu 25+ where the system Python is newer than 3.12). Quick start:
 
 ```bash
 cd gui
@@ -346,7 +350,7 @@ and `error`.
 | `send_text` / `interrupt` / `set_mic_mode` | one typed turn; word-boundary interrupt; `vad`/`ptt`/`muted` |
 | `get_state` | `{session, backend, model, controller, state, mic_mode, tts_engine_active}` |
 
-**Smoke test** (no robot or API key needed, runs against a scripted backend — use your
+**Smoke test** (no robot or API key needed, runs against a scripted backend  use your
 venv's Python, e.g. `OhBots/Scripts/python.exe` on Windows):
 
 ```bash

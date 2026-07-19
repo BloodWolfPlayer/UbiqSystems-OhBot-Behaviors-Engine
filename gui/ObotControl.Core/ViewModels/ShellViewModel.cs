@@ -125,12 +125,12 @@ public partial class ShellViewModel : ObservableObject
         {
             EngineOwned = false;
             // A nonzero exit here usually just means some other engine (e.g. one left
-            // running from an earlier session) already owns this port — the connect
+            // running from an earlier session) already owns this port  the connect
             // retry above will attach to that one instead, so this isn't a real failure.
             if (engine.ObservedAddressInUse)
             {
                 Logs.Append("warn",
-                    $"an engine is already running on {Host}:{Port} — attaching to it instead of the one just launched.");
+                    $"an engine is already running on {Host}:{Port}  attaching to it instead of the one just launched.");
             }
             else
             {
@@ -214,7 +214,7 @@ public partial class ShellViewModel : ObservableObject
         {
             await Store.LoadAsync();
             await Setup.RefreshDevicesCommand.ExecuteAsync(null);
-            // Restores the remembered model selection into the (now-populated) list —
+            // Restores the remembered model selection into the (now-populated) list 
             // the picker itself was already restored from GuiSettings in the constructor.
             if (Dashboard.RequiresModel) await Dashboard.RefreshModelsCommand.ExecuteAsync(null);
             var state = await Api.GetStateAsync();

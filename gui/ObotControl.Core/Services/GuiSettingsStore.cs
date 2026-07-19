@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace ObotControl.Core.Services;
 
-/// <summary>GUI-local preferences — currently just which Python interpreter to launch the
+/// <summary>GUI-local preferences  currently just which Python interpreter to launch the
 /// engine with. Separate from <c>config.json</c>, which the engine owns and which requires
 /// a live connection to write; this has to work before any connection exists.</summary>
 public sealed class GuiSettings

@@ -8,7 +8,7 @@ Protocol (see docs/gui-plan.md §3.2):
 
 All intelligence stays in the Python engine; the socket is a thin RPC + event
 boundary so the GUI framework is swappable and the engine can later run on the Pi
-with the GUI connecting over LAN. Binds to 127.0.0.1 only — no auth by design.
+with the GUI connecting over LAN. Binds to 127.0.0.1 only  no auth by design.
 """
 
 from __future__ import annotations
@@ -339,7 +339,7 @@ async def serve(host: str = "127.0.0.1", port: int = 8765,
         # The GUI's whole point is to create/repair config.json, so a missing file is
         # not fatal here: start from defaults and let set_config write it.
         cfg = Config.from_dict({}, path=config_path())
-        print(f"[serve] no config.json yet — starting from defaults ({config_path()}).")
+        print(f"[serve] no config.json yet  starting from defaults ({config_path()}).")
 
     server = ControlServer(cfg, default_controller=default_controller)
     await server.run(host, port)

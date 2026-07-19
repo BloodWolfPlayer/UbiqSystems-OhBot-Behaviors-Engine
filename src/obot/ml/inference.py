@@ -19,7 +19,7 @@ import torch
 
 from ..robot import joints
 
-#* src/obot/ml/inference.py -> parents[3] is the repo root.
+# src/obot/ml/inference.py -> parents[3] is the repo root.
 _ML_DIR = Path(__file__).resolve().parents[3] / "mlBehaviour"
 
 
@@ -42,8 +42,8 @@ log_mel_spectrogram = _features_mod.log_mel_spectrogram
 normalize_features = _features_mod.normalize_features
 resample_channel = _convert_mod.resample_channel
 
-#* Column order beat2_to_ohbot.py writes motion targets in (OHBOT_AXES) -- a
-#* checkpoint's output columns line up with this, in order, left to right.
+# Column order beat2_to_ohbot.py writes motion targets in (OHBOT_AXES) -- a
+# checkpoint's output columns line up with this, in order, left to right.
 AXIS_ORDER: tuple[str, ...] = (
     "HEADNOD", "HEADTURN", "EYETURN", "EYETILT", "LIDBLINK", "TOPLIP", "BOTTOMLIP",
 )
@@ -58,8 +58,8 @@ AXIS_TO_JOINT: dict[str, int] = {
     "BOTTOMLIP": joints.BOTTOMLIP,
 }
 
-#* Sample rate beat2_to_ohbot.py resampled training audio to before extracting
-#* features -- inference must feed the model audio at the same rate.
+# Sample rate beat2_to_ohbot.py resampled training audio to before extracting
+# features -- inference must feed the model audio at the same rate.
 MODEL_AUDIO_SR = 16000
 
 

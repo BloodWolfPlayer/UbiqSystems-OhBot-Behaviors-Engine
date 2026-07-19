@@ -11,7 +11,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
-        // Tunnel so the window sees the key before a focused control consumes it — needed
+        // Tunnel so the window sees the key before a focused control consumes it  needed
         // to catch the push-to-talk hotkey. Typing in text boxes is explicitly left alone.
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
     }

@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace ObotControl.Core.Protocol;
 
-/// <summary>Canonical event topic names — must match <c>src/obot/core/events.py</c>.</summary>
+/// <summary>Canonical event topic names  must match <c>src/obot/core/events.py</c>.</summary>
 public static class Topics
 {
     public const string State = "state";

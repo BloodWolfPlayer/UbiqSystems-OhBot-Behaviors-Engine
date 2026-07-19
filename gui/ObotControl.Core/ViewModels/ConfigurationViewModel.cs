@@ -8,7 +8,7 @@ namespace ObotControl.Core.ViewModels;
 /// <summary>
 /// The full config editor: Speech (engine mode + per-engine voice settings + mouth-tuning
 /// sliders), Motion, and Behaviors. Mouth-tuning sliders apply <em>live</em> (debounced
-/// ~250 ms) so you can dial in lip-sync while the robot is talking — the engine reads
+/// ~250 ms) so you can dial in lip-sync while the robot is talking  the engine reads
 /// speech.mouth live. Everything else is Save/Revert with a dirty indicator.
 /// </summary>
 public partial class ConfigurationViewModel : ObservableObject

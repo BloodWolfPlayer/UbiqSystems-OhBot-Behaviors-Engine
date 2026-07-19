@@ -4,7 +4,7 @@ While an emotion is active, the mixer (:meth:`AnimatedObotController._mixer_loop
 in ``controller.py``) adds these deltas to :data:`joints.REST_POSITION` every
 tick instead of settling back to plain neutral. Ambient behaviors (blinks, sway,
 idle wander) and live speech visemes simply ride on top of this shifted
-baseline, so a sad face still blinks and talks normally — just around a lower
+baseline, so a sad face still blinks and talks normally  just around a lower
 mouth and downward gaze instead of dead-center rest.
 
 Each pose is a servo-position delta (same 0..10 units as everything else,
@@ -57,7 +57,7 @@ CONFUSED: EmotionPose = {
     joints.TOPLIP: -1.0,
 }
 
-# Tight downturned mouth, lowered gaze, head dropped — confrontational.
+# Tight downturned mouth, lowered gaze, head dropped  confrontational.
 ANGRY: EmotionPose = {
     joints.TOPLIP: -2.0,
     joints.BOTTOMLIP: 1.0,
@@ -105,7 +105,7 @@ EMOTIONS: dict[str, EmotionPose] = {
 def resolve(name: str) -> EmotionPose | None:
     """Look up a pose by name (case-insensitive).
 
-    Returns None for an unrecognised name — callers still surface the raw name
+    Returns None for an unrecognised name  callers still surface the raw name
     (e.g. an ``emotion`` event / transcript chip) even when it doesn't map to a
     pose, since the LLM's persona can name any emotion word.
     """
@@ -122,7 +122,7 @@ def combined_pose(name: str) -> EmotionPose | None:
     """The pose actually handed to the mixer for ``name``.
 
     :data:`NEUTRAL`'s rest-position override plus the emotion's own expression
-    on top, so recalibrating NEUTRAL shifts every emotion's baseline — not just
+    on top, so recalibrating NEUTRAL shifts every emotion's baseline  not just
     the plain "Neutral" state. None for an unrecognised name (see :func:`resolve`).
     """
     pose = resolve(name)

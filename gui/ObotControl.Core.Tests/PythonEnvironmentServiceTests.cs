@@ -4,8 +4,8 @@ using Xunit;
 namespace ObotControl.Core.Tests;
 
 /// <summary>
-/// Covers the deterministic, local-only pieces of Python environment provisioning —
-/// venv discovery/version parsing and status gating — against temp-directory fixtures.
+/// Covers the deterministic, local-only pieces of Python environment provisioning 
+/// venv discovery/version parsing and status gating  against temp-directory fixtures.
 /// Nothing here downloads or runs the real installer (too slow/networked for the suite;
 /// that pipeline is exercised manually per docs/gui-plan.md's verification steps).
 /// </summary>
@@ -27,11 +27,13 @@ public sealed class PythonEnvironmentServiceTests : IDisposable
 
     private string CreateFakeVenv(string name, string version)
     {
+        // Mirrors the platform's real venv layout (Scripts\python.exe vs bin/python), which is what ScanVenvDirs looks for.
         var dir = Path.Combine(_repoRoot, name);
-        Directory.CreateDirectory(Path.Combine(dir, "Scripts"));
-        File.WriteAllText(Path.Combine(dir, "Scripts", "python.exe"), "not a real executable");
-        File.WriteAllText(Path.Combine(dir, "pyvenv.cfg"), $"home = C:\\fake\nversion = {version}\ninclude-system-site-packages = false\n");
-        return Path.Combine(dir, "Scripts", "python.exe");
+        var exe = Path.Combine(dir, PythonEnvironmentService.VenvRelativePythonPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
+        File.WriteAllText(exe, "not a real executable");
+        File.WriteAllText(Path.Combine(dir, "pyvenv.cfg"), $"home = /fake\nversion = {version}\ninclude-system-site-packages = false\n");
+        return exe;
     }
 
     [Fact]
@@ -79,7 +81,7 @@ public sealed class PythonEnvironmentServiceTests : IDisposable
     public void CheckStatus_FallsBackWhenRememberedPathIsGone()
     {
         var exe = CreateFakeVenv("OhBots", "3.12.10");
-        var missing = Path.Combine(_repoRoot, "Deleted", "Scripts", "python.exe");
+        var missing = Path.Combine(_repoRoot, "Deleted", PythonEnvironmentService.VenvRelativePythonPath);
 
         var status = _service.CheckStatus(_repoRoot, missing);
 
@@ -121,5 +123,19 @@ public sealed class PythonEnvironmentServiceTests : IDisposable
     {
         Assert.EndsWith(Path.Combine("Python", PythonEnvironmentService.PythonVersion), PythonEnvironmentService.ManagedPythonDir);
         Assert.Equal("3.12.10", PythonEnvironmentService.PythonVersion);
+    }
+
+    [Fact]
+    public void Service_IsSupportedOnDesktopPlatforms()
+    {
+        Assert.True(_service.IsSupported);
+    }
+
+    [Fact]
+    public void RequirementsFileName_MatchesThePlatform()
+    {
+        var name = PythonEnvironmentService.RequirementsFileName;
+        Assert.Contains(name, new[] { "windows.txt", "linux.txt", "pi.txt" });
+        Assert.Equal(OperatingSystem.IsWindows(), name == "windows.txt");
     }
 }

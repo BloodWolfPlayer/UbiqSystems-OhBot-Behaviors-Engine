@@ -1,4 +1,4 @@
-"""The server-side conversation session — the RPC-driven twin of ``_voice_session``.
+"""The server-side conversation session  the RPC-driven twin of ``_voice_session``.
 
 Where ``obot.__main__._voice_session`` wires the microphone, interrupt controller
 and keyboard to a pipeline for the *console* app, :class:`ServerSession` owns the

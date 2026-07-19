@@ -1,4 +1,4 @@
-# Raspberry Pi deployment — full hardware stack
+# Raspberry Pi deployment  full hardware stack
 # (ohbot is already pulled in via the windows base; the Pi adds the GPIO stack.)
 -r linux.txt
 

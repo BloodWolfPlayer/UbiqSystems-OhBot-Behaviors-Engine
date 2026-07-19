@@ -34,15 +34,16 @@ def make_controller(
 
     ``sim`` opens the digital OhBot face (full speech + motion, no servos).
     ``force_console`` (or a machine without the ohbot library) gives the
-    print-only controller so the whole pipeline — including LLM streaming and
-    the microphone path — can be tested anywhere.
+    print-only controller so the whole pipeline  including LLM streaming and
+    the microphone path  can be tested anywhere.
     """
+    from .config import DEFAULT_OHBOT_PORT
     from .speech.config import MotionSettings, SpeechSettings
 
     speech = cfg.speech if cfg is not None else SpeechSettings()
     motion = cfg.motion if cfg is not None else MotionSettings()
     api_key = cfg.gemini_api_key if cfg is not None else ""
-    port = cfg.ohbot_port if cfg is not None else "COM7"
+    port = cfg.ohbot_port if cfg is not None else DEFAULT_OHBOT_PORT
 
     if sim:
         try:
@@ -118,7 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _try_load_config():
-    """Config if present, else None — the scripted demo must run without one."""
+    """Config if present, else None  the scripted demo must run without one."""
     try:
         from .config import load_config
 
@@ -281,7 +282,7 @@ async def _voice_session(cfg, pipeline: RobotPipeline) -> None:
     audio.start()
     keys.start()
     if not keys.available:
-        print("[keys] no interactive terminal detected — keyboard controls disabled "
+        print("[keys] no interactive terminal detected  keyboard controls disabled "
               "(voice barge-in still works).")
 
     print(_CONTROLS_BANNER)

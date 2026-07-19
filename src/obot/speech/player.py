@@ -4,7 +4,7 @@ The old stack played whole WAVs through winsound with no way to stop them.
 Here a worker thread streams the clip in ~20 ms chunks, so:
 
 * :attr:`position_s` exposes a live playback clock (drives lips + timed actions),
-* :meth:`stop_at` ends playback at an exact time — the word-boundary stop,
+* :meth:`stop_at` ends playback at an exact time  the word-boundary stop,
 * :meth:`abort` kills it immediately (shutdown / kill-switch).
 
 A short fade is applied to the final chunk so a stop never clicks.

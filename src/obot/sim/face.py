@@ -151,7 +151,7 @@ class FaceWindow:
 
         # The window lives on this thread. Without this, tkinter stashes the Tk
         # instance in a module-level default root, which the *main* thread then
-        # finalises at interpreter exit — Tcl aborts the whole process with
+        # finalises at interpreter exit  Tcl aborts the whole process with
         # "Tcl_AsyncDelete: async handler deleted by the wrong thread".
         try:
             tk.NoDefaultRoot()

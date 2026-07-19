@@ -29,12 +29,12 @@ public static class HelpText
     public const string RefreshModels = "Fetch the available models for the selected backend.";
     public const string Controller =
         "What the session drives: 'virtual' (headless motion + audio), 'sim' (engine face window), " +
-        "'console' (prints only), or 'hardware' (real servos over the COM port).";
+        "'console' (prints only), or 'hardware' (real servos over the serial port).";
     public const string StartSession = "Start a conversation session with the chosen backend/model/controller.";
     public const string StopSession = "End the current session.";
     public const string SwitchSession = "Restart the session to apply a new backend or model without a manual stop/start.";
     public const string MicMode =
-        "Microphone: 'muted' ignores it, 'vad' listens continuously (just talk — it also " +
+        "Microphone: 'muted' ignores it, 'vad' listens continuously (just talk  it also " +
         "interrupts the bot), 'ptt' (push-to-talk) stays parked until you click Talk or press " +
         "the hotkey, then captures one phrase.";
     public const string PttTalk =
@@ -45,15 +45,15 @@ public static class HelpText
         "any time (window focused) to talk. Typing in the message box is never intercepted.";
     public const string Send = "Send the typed message as one conversation turn.";
     public const string Interrupt =
-        "Cut the robot off at the next word boundary — same as talking over it or pressing SPACE in the console.";
+        "Cut the robot off at the next word boundary  same as talking over it or pressing SPACE in the console.";
     public const string StateIndicator = "What the robot is doing right now: idle, listening, or speaking.";
     public const string ActiveEngine = "Which TTS voice actually produced the last speech (gemini / piper / local).";
     public const string FacePreview =
-        "Live mirror of the robot's face — head pose, eyes, blinks and lips — from the engine's joint stream.";
+        "Live mirror of the robot's face  head pose, eyes, blinks and lips  from the engine's joint stream.";
 
     // -- setup -------------------------------------------------------------------------
     public const string PythonSetupIntro =
-        "Guarantees a working Python 3.12 environment before you launch the engine — no " +
+        "Guarantees a working Python 3.12 environment before you launch the engine  no " +
         "terminal needed. Prefers an existing venv (or a system Python 3.12) already on " +
         "this machine; 'Set up automatically' downloads a private Python and builds one " +
         "for you if nothing usable is found.";
@@ -66,7 +66,10 @@ public static class HelpText
         "Install/update the project's dependencies into the selected environment. Also " +
         "how you re-run setup after requirements.txt changes.";
     public const string RefreshDevices = "Re-query the engine host for microphones and installed TTS voices.";
-    public const string ComPort = "Serial port the physical OhBot is on (e.g. COM7). Only used by the 'hardware' controller.";
+    public const string ComPort =
+        "Serial port the physical OhBot is on (e.g. COM7 on Windows, /dev/ttyACM0 on Linux). Only used by " +
+        "the 'hardware' controller. On Linux your user must be in the 'dialout' group to open it " +
+        "(sudo usermod -aG dialout $USER, then log out and back in).";
     public const string ApiKey = "Google AI Studio key for the Gemini backend and Gemini TTS. Stored in config.json on the engine.";
     public const string SshFields = "Connection details for a remote machine running Ollama, reached over an SSH tunnel.";
     public const string MicPick = "Pick the microphone the robot listens through. Use Test to confirm it works.";
@@ -75,7 +78,7 @@ public static class HelpText
     public const string VoskModel = "Folder of an unzipped Vosk model (contains am/, conf/, graph/). Only needed for offline STT.";
     public const string VoskAutoSetup =
         "Download the selected Vosk model from alphacephei.com and unzip it into ohbotData/vosk/, " +
-        "then fill in the STT engine and model path above automatically — no manual download needed.";
+        "then fill in the STT engine and model path above automatically  no manual download needed.";
     public const string TtsEngine =
         "Which voice to speak with. 'auto' chains the best available (edge → kokoro → piper → " +
         "local), falling through on failure. Or pin one: edge (online, best), kokoro (offline, " +
@@ -86,7 +89,7 @@ public static class HelpText
 
     // -- manual control ------------------------------------------------------------------
     public const string EmotionsPanel =
-        "Trigger an emotion's default pose directly — the same mouth/eyes/nod bias the LLM's " +
+        "Trigger an emotion's default pose directly  the same mouth/eyes/nod bias the LLM's " +
         "(Emotion) tags apply. It persists (ambient behaviors and speech still layer on top) " +
         "until you pick another; 'Neutral' clears it back to plain rest. Needs a running session.";
     public const string EnableManualControl =
@@ -114,21 +117,21 @@ public static class HelpText
         "Watch the transcript, hit the big Interrupt button, switch the mic mode, and see the live state and face.";
     public const string PageSetup =
         "First-run setup: step 0 guarantees a working Python environment (no terminal needed) " +
-        "before Launch engine works, then API key, COM port, remote-Ollama SSH, microphone " +
+        "before Launch engine works, then API key, serial port, remote-Ollama SSH, microphone " +
         "(with a level test), speech-to-text engine, and TTS voices with per-engine Test buttons. " +
         "Save writes config.json.";
     public const string PageConfiguration =
         "Fine-tuning: TTS engine + per-engine voice settings, mouth-tuning sliders that apply live while " +
         "talking, servo motion limits, and the ambient behavior modules. Save/Revert with a dirty indicator.";
     public const string PageManualControl =
-        "Jog each motor directly and watch its live position — for testing/calibrating servos outside " +
+        "Jog each motor directly and watch its live position  for testing/calibrating servos outside " +
         "a conversation. Enable to freeze every joint where it is, drag sliders to move one, Release to " +
         "hand control back to ambient behaviors and speech. The Emotions row above triggers a default " +
         "mouth/eyes/nod pose directly, the same one the LLM's (Emotion) tags apply. Needs a running session.";
     public const string PageLogs =
         "Everything the engine prints plus structured log/error events, with Info/Warning/Error filters.";
     public const string Intro =
-        "OhBot Control talks to the Python engine over a local WebSocket — all the intelligence stays in " +
+        "OhBot Control talks to the Python engine over a local WebSocket  all the intelligence stays in " +
         "Python; this app is a thin client. Start by clicking Launch engine (or Attach to one you started), " +
         "then work left-to-right through the tabs. Hover any control for a one-line explanation.";
 }

@@ -1,14 +1,14 @@
 """Ambient behavior modules: things the robot does *around* the conversation.
 
-The :class:`BehaviorManager` tracks what the robot is currently doing —
-``idle``, ``listening`` (a human is talking to it) or ``speaking`` — and runs
+The :class:`BehaviorManager` tracks what the robot is currently doing 
+``idle``, ``listening`` (a human is talking to it) or ``speaking``  and runs
 small background gestures that match the moment:
 
-* **auto_blink** — periodic blinks in every state (replaces the old blink thread),
-* **listening_nod** — slow attentive nods while being spoken to,
-* **speaking_sway** — subtle head/eye drift while talking, so the robot doesn't
+* **auto_blink**  periodic blinks in every state (replaces the old blink thread),
+* **listening_nod**  slow attentive nods while being spoken to,
+* **speaking_sway**  subtle head/eye drift while talking, so the robot doesn't
   freeze like a statue between scripted gestures,
-* **idle_wander** — occasional eye wandering when nothing is happening.
+* **idle_wander**  occasional eye wandering when nothing is happening.
 
 Adding a module = appending one :class:`BehaviorModule` in
 :func:`default_modules`. All timings/strengths are tunable via the
@@ -112,7 +112,7 @@ async def _fire_blink(controller: "ObotController", intensity: float) -> None:
 
 
 async def _fire_listening_nod(controller: "ObotController", intensity: float) -> None:
-    # Two gentle dips — an attentive "mm-hm", far smaller than the [Nod] action.
+    # Two gentle dips  an attentive "mm-hm", far smaller than the [Nod] action.
     dip = 1.2 * intensity
     for _ in range(2):
         if not controller.enqueue_offset(joints.HEADNOD, +dip, 0.22):

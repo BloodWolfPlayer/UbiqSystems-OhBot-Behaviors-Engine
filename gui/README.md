@@ -19,7 +19,7 @@ codebase runs natively on **Windows, Linux and the Raspberry Pi**.
 - **Dashboard**: pick backend/model/controller, Start, type or talk, big **Interrupt**
   button, mic-mode toggle, live state indicator and active-TTS badge.
 - **Setup**: step 0 provisions the Python environment itself (see below), then API key,
-  COM port, remote-Ollama SSH, microphone (with a live level test), STT engine, and TTS
+  serial port, remote-Ollama SSH, microphone (with a live level test), STT engine, and TTS
   voices with per-engine **Test** buttons. Save/Reload.
 - **Configuration**: TTS engine + per-engine voice settings, **mouth-tuning sliders that
   apply live while the robot talks**, servo motion limits, ambient behaviors. Save/Revert/Reload.
@@ -31,18 +31,25 @@ codebase runs natively on **Windows, Linux and the Raspberry Pi**.
 - **Logs**: engine stdout + structured log/error events, with level filters.
 
 The **face preview is docked on the right and visible on every page**. It draws the robot
-with a pseudo-3D look — the head yaws and nods with parallax and shading, the eyes are
-glossy spheres under sliding lids, the mouth is two brushed-metal lip plates — all driven
+with a pseudo-3D look  the head yaws and nods with parallax and shading, the eyes are
+glossy spheres under sliding lids, the mouth is two brushed-metal lip plates  all driven
 live from the engine's joint stream, so it moves exactly as the servos would.
 A **? Help** button (and hover tooltips on every control) explains what everything does.
 
 ## Prerequisites
 
-- **.NET 10 SDK** (`dotnet --version` ≥ 10).
+- **.NET 10 SDK** (`dotnet --version` ≥ 10). On Ubuntu, install it from Microsoft's
+  package feed or with the official install script:
+  `curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 10.0`.
 - **Windows**: nothing else. The Setup tab's "0. Python environment" step provisions
-  Python itself (see below). **Linux/Pi**: still follow the manual setup in the repo
-  [README.md](../README.md) (`pip install -e .` + `requirements/linux.txt`/`pi.txt`);
-  automatic provisioning is Windows-only for now.
+  Python itself (see below).
+- **Linux (Ubuntu 24.04+)**: the same automatic provisioning works  it prefers an
+  existing venv or a system Python 3.12, and otherwise downloads a private
+  python-build-standalone 3.12 (no root, no PATH changes), which is also what makes
+  Ubuntu 25+ work even though its system Python is newer than 3.12. Two system
+  libraries are needed once for audio: `sudo apt install libportaudio2 espeak-ng`.
+  For the physical robot, add yourself to the serial group:
+  `sudo usermod -aG dialout $USER` (log out and back in).
 - No extra native tooling needed. Avalonia restores from NuGet and builds with plain `dotnet`.
 
 ## Build & run
@@ -58,8 +65,9 @@ dotnet run  --project ObotControl.App/ObotControl.App.csproj        # launch the
 
 1. First run: the **Setup** tab opens automatically with **"0. Python environment"** at
    the top. It prefers whatever's already on your machine (an existing `OhBots`/`.venv`
-   venv, or a system Python 3.12) and only downloads/installs a private Python if nothing
-   usable is found. No admin prompt, no terminal, and it doesn't touch PATH or any
+   venv, or a system Python 3.12) and only downloads a private Python if nothing
+   usable is found  the python.org installer on Windows, a python-build-standalone
+   tarball on Linux. No admin prompt, no terminal, and it doesn't touch PATH or any
    existing install. Once it reports Ready, **Launch engine** (spawns
    `python -m obot --serve` from the repo root and connects) lights up, or you can
    **Attach** to a server you started yourself (host/port fields).

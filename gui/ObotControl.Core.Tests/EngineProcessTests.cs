@@ -6,7 +6,7 @@ namespace ObotControl.Core.Tests;
 /// <summary>
 /// Covers the "port already in use" detection that lets the shell tell a real engine
 /// crash apart from "some other engine already owns this port, we attached to that one
-/// instead" — see the traceback this was written for (WinError 10048 on a stray process).
+/// instead"  see the traceback this was written for (WinError 10048 on a stray process).
 /// </summary>
 public class EngineProcessTests
 {

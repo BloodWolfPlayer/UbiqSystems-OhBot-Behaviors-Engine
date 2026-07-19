@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -12,6 +13,11 @@ CONFIG_FILENAME = "config.json"
 EXAMPLE_FILENAME = "config.example.json"
 # Hard cap on how many "recent models" we remember per backend.
 RECENTS_CAP = 3
+
+# Where the OhBot usually shows up when nothing is configured yet: COM7 on Windows,
+# the first USB CDC device on Linux/the Pi. Only a starting point  the ohbot library
+# scans every serial port anyway; this one is just tried first.
+DEFAULT_OHBOT_PORT = "COM7" if sys.platform == "win32" else "/dev/ttyACM0"
 
 
 @dataclass
@@ -39,9 +45,9 @@ class Config:
     audio: AudioConfig = field(default_factory=AudioConfig)
     recent_gemini_models: list[str] = field(default_factory=list)
     recent_ollama_models: list[str] = field(default_factory=list)
-    ohbot_port: str = "COM7"
+    ohbot_port: str = DEFAULT_OHBOT_PORT
     # Speech stack (TTS engine choice, voices, mouth animation), servo mixing,
-    # and ambient behavior tunables. All optional in config.json — defaults apply.
+    # and ambient behavior tunables. All optional in config.json  defaults apply.
     speech: SpeechSettings = field(default_factory=SpeechSettings)
     motion: MotionSettings = field(default_factory=MotionSettings)
     behaviors: BehaviorSettings = field(default_factory=BehaviorSettings)
@@ -110,7 +116,7 @@ class Config:
             ),
             recent_gemini_models=list(data.get("recent_gemini_models", [])),
             recent_ollama_models=list(data.get("recent_ollama_models", [])),
-            ohbot_port=data.get("ohbot_port", "COM7"),
+            ohbot_port=data.get("ohbot_port", DEFAULT_OHBOT_PORT),
             speech=SpeechSettings.from_dict(data.get("speech")),
             motion=MotionSettings.from_dict(data.get("motion")),
             behaviors=BehaviorSettings.from_dict(data.get("behaviors")),

@@ -43,8 +43,8 @@ class SpeechClip:
     timeline: SpeechTimeline
     mouth: MouthTrack
     engine_name: str
-    #* None unless speech.gesture.enabled and the model loaded/predicted successfully --
-    #* when present, speak() drives pose_sink from this instead of the envelope mouth track.
+    # None unless speech.gesture.enabled and the model loaded/predicted successfully --
+    # when present, speak() drives pose_sink from this instead of the envelope mouth track.
     pose: "GesturePrediction | None" = None
 
 
@@ -78,7 +78,7 @@ class SpeechEngine:
         if not settings.enabled or not settings.checkpoint_path:
             return None
         try:
-            #* torch is heavy and optional -- only imported when gesture driving is on.
+            # torch is heavy and optional -- only imported when gesture driving is on.
             from ..ml.inference import GestureModel
 
             return GestureModel(settings.checkpoint_path, device=settings.device)
@@ -180,7 +180,7 @@ class SpeechEngine:
                     self._player.stop_at(boundary)
                     stop_applied = True
 
-                # Once the cut is in motion, no further gestures — a nod firing
+                # Once the cut is in motion, no further gestures  a nod firing
                 # during the fade-out would look like the robot ignoring the user.
                 while (
                     not stop_applied
@@ -192,9 +192,9 @@ class SpeechEngine:
                         fired.append(asyncio.create_task(on_marker(marker)))
                     next_marker += 1
 
-                #* An AI-predicted pose for this clip takes over the whole face/head --
-                #* driving both it and the envelope mouth track would just have them
-                #* fight over the lips, so the envelope track only runs as a fallback.
+                # An AI-predicted pose for this clip takes over the whole face/head --
+                # driving both it and the envelope mouth track would just have them
+                # fight over the lips, so the envelope track only runs as a fallback.
                 if clip.pose is not None and pose_sink is not None:
                     frame = min(
                         clip.pose.motion.shape[0] - 1,
@@ -215,14 +215,14 @@ class SpeechEngine:
 
         if self._player.error is not None:
             # Playback broke (usually: no output device). Raise before firing the
-            # trailing markers — the controller falls back to simulated pacing and
+            # trailing markers  the controller falls back to simulated pacing and
             # fires the full marker list there instead.
             if fired:
                 await asyncio.gather(*fired, return_exceptions=True)
             raise self._player.error
 
         # Completed normally: markers sitting on the final word / trailing
-        # punctuation may not have fired inside the loop — fire them now.
+        # punctuation may not have fired inside the loop  fire them now.
         if not stop_applied and on_marker is not None:
             for _, _, marker in timed[next_marker:]:
                 fired.append(asyncio.create_task(on_marker(marker)))

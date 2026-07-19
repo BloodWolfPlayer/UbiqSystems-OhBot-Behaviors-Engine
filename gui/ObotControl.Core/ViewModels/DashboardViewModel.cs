@@ -10,7 +10,7 @@ namespace ObotControl.Core.ViewModels;
 /// <summary>
 /// The session dashboard: pick a backend/model/controller, start/stop a conversation,
 /// type turns, interrupt, flip the mic, and watch the live transcript, state indicator,
-/// active TTS engine and face preview — all driven by engine events.
+/// active TTS engine and face preview  all driven by engine events.
 /// </summary>
 public partial class DashboardViewModel : ObservableObject
 {
@@ -68,9 +68,9 @@ public partial class DashboardViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanConverse))]
     private bool _connected;
     [ObservableProperty] private BotState _state = BotState.Idle;
-    [ObservableProperty] private string _activeEngine = "—";
+    [ObservableProperty] private string _activeEngine = "";
 
-    /// <summary>Emotion currently active on the engine — mirrors get_state/session_start/stop
+    /// <summary>Emotion currently active on the engine  mirrors get_state/session_start/stop
     /// so a reconnect to an already-running session shows the real pose, not just "Neutral".
     /// Kept in sync live too, via the "emotion" event (see HandleEvent below).</summary>
     [ObservableProperty] private string _emotion = "Neutral";
@@ -339,7 +339,7 @@ public partial class DashboardViewModel : ObservableObject
         SessionActive = state.Session;
         if (!state.Session) PendingUserText = null;
         MicMode = state.MicMode;
-        ActiveEngine = state.TtsEngineActive ?? "—";
+        ActiveEngine = state.TtsEngineActive ?? "";
         Emotion = state.Emotion;
         State = state.State switch
         {
