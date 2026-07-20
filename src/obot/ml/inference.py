@@ -44,8 +44,10 @@ resample_channel = _convert_mod.resample_channel
 
 #* Column order beat2_to_ohbot.py writes motion targets in (OHBOT_AXES) -- a
 #* checkpoint's output columns line up with this, in order, left to right.
+#* HEADTILT is appended last so older 7-axis checkpoints (converted before
+#* HEADTILT existed) still line up correctly via AXIS_ORDER[:n_axes] below.
 AXIS_ORDER: tuple[str, ...] = (
-    "HEADNOD", "HEADTURN", "EYETURN", "EYETILT", "LIDBLINK", "TOPLIP", "BOTTOMLIP",
+    "HEADNOD", "HEADTURN", "EYETURN", "EYETILT", "LIDBLINK", "TOPLIP", "BOTTOMLIP", "HEADTILT",
 )
 
 AXIS_TO_JOINT: dict[str, int] = {
@@ -56,6 +58,7 @@ AXIS_TO_JOINT: dict[str, int] = {
     "LIDBLINK": joints.LIDBLINK,
     "TOPLIP": joints.TOPLIP,
     "BOTTOMLIP": joints.BOTTOMLIP,
+    "HEADTILT": joints.HEADTILT,
 }
 
 #* Sample rate beat2_to_ohbot.py resampled training audio to before extracting

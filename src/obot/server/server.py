@@ -329,7 +329,8 @@ def _list_ollama_blocking(cfg: Config) -> list[str]:
 
 
 async def serve(host: str = "127.0.0.1", port: int = 8765,
-                default_controller: str = "virtual") -> None:
+                default_controller: str = "virtual",
+                no_gesture_model: bool = False) -> None:
     """Load config and run the control server until cancelled."""
     from ..config import load_config
 
@@ -340,6 +341,9 @@ async def serve(host: str = "127.0.0.1", port: int = 8765,
         # not fatal here: start from defaults and let set_config write it.
         cfg = Config.from_dict({}, path=config_path())
         print(f"[serve] no config.json yet — starting from defaults ({config_path()}).")
+
+    if no_gesture_model:
+        cfg.speech.gesture.enabled = False
 
     server = ControlServer(cfg, default_controller=default_controller)
     await server.run(host, port)

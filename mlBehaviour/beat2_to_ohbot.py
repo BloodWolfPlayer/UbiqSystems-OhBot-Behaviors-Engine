@@ -6,7 +6,7 @@ Convert the BEAT2 dataset (SMPL-X body + FLAME face motion capture, paired
 with speech audio) into training data for an Ohbot robot head:
 
     audio waveform  -->  [HEADNOD, HEADTURN, EYETURN, EYETILT, LIDBLINK,
-                          TOPLIP, BOTTOMLIP]   (each 0-10, Ohbot's native range)
+                          TOPLIP, BOTTOMLIP, HEADTILT]   (each 0-10, Ohbot's native range)
 
 ------------------------------------------------------------------------------
 WHAT THIS SCRIPT ASSUMES ABOUT THE DATA (please sanity-check on your copy)
@@ -101,10 +101,14 @@ except ImportError:
 # SMPL-X 55-joint order, indices we need (standard order used by BEAT2/EMAGE)
 J_NECK, J_HEAD, J_JAW, J_LEYE, J_REYE = 12, 15, 22, 23, 24
 
-# Ohbot servo axis names, matching ohbot-python's HEADNOD/HEADTURN/... constants.
+# Ohbot servo axis names, matching ohbot-python's HEADNOD/HEADTURN/... constants,
+# and the engine's robot/joints.py canonical joint order.
 # Ohbot's native command range for every motor is 0-10 (see ohbot.move(axis, 0-10)).
-OHBOT_AXES = ["HEADNOD", "HEADTURN", "EYETURN", "EYETILT", "LIDBLINK", "TOPLIP", "BOTTOMLIP"]
-OHBOT_AXES_WITH_ROLL = OHBOT_AXES + ["HEADROLL"]  # optional 8th servo on some builds
+# HEADTILT (motor 7 / "HeadRoll" in the OMD calibration) is included by default --
+# it's a harmless no-op on units without that 8th servo fitted, and always present
+# on Picoh -- see robot/joints.py. Pass --exclude-head-tilt on `convert` to drop it
+# for a 7-axis checkpoint instead.
+OHBOT_AXES = ["HEADNOD", "HEADTURN", "EYETURN", "EYETILT", "LIDBLINK", "TOPLIP", "BOTTOMLIP", "HEADTILT"]
 
 OHBOT_MIN, OHBOT_MAX, OHBOT_REST = 0.0, 10.0, 5.0
 
@@ -196,7 +200,7 @@ def extract_raw_channels(poses, top_lip_ratio=0.25):
 
     head_turn = head_euler[:, 0]   # yaw   -> HEADTURN
     head_nod = head_euler[:, 1]    # pitch -> HEADNOD
-    head_roll = head_euler[:, 2]   # roll  -> HEADROLL (optional)
+    head_roll = head_euler[:, 2]   # roll  -> HEADTILT
 
     # Eyes: already local to the head joint, so this is gaze *relative to head*,
     # which is what EYETURN/EYETILT should represent. Average L/R since Ohbot
@@ -215,7 +219,7 @@ def extract_raw_channels(poses, top_lip_ratio=0.25):
     return {
         "HEADNOD": head_nod,
         "HEADTURN": head_turn,
-        "HEADROLL": head_roll,
+        "HEADTILT": head_roll,
         "EYETURN": eye_turn,
         "EYETILT": eye_tilt,
         "TOPLIP": top_lip,
@@ -241,7 +245,7 @@ def calibrate(pairs, top_lip_ratio, sample_every=1, pct=(1.0, 99.0)):
     """First pass over the dataset: collect raw channel values so we can map
     them to Ohbot's 0-10 range using robust (percentile-based) min/max instead
     of a handful of outlier frames blowing up the whole scale."""
-    collected = {ax: [] for ax in OHBOT_AXES_WITH_ROLL if ax != "LIDBLINK"}
+    collected = {ax: [] for ax in OHBOT_AXES if ax != "LIDBLINK"}
 
     for i, (npz_path, _wav_path) in enumerate(pairs):
         try:
@@ -333,7 +337,7 @@ def load_audio(path, target_sr=16000):
 class ConvertConfig:
     control_hz: float = 20.0
     top_lip_ratio: float = 0.25
-    include_headroll: bool = False
+    include_head_tilt: bool = True
     lidblink_default: float = 8.0
     invert_axes: list = field(default_factory=list)  # e.g. ["HEADTURN"]
     audio_sr: int = 16000
@@ -345,8 +349,8 @@ def convert_one(npz_path, wav_path, calibration, cfg: ConvertConfig):
     raw = extract_raw_channels(poses, top_lip_ratio=cfg.top_lip_ratio)
 
     axes = list(OHBOT_AXES)
-    if cfg.include_headroll:
-        axes.append("HEADROLL")
+    if not cfg.include_head_tilt:
+        axes.remove("HEADTILT")
 
     T = poses.shape[0]
     duration = T / fps
@@ -407,7 +411,7 @@ def run_convert(args):
     cfg = ConvertConfig(
         control_hz=args.control_hz,
         top_lip_ratio=args.top_lip_ratio,
-        include_headroll=args.include_headroll,
+        include_head_tilt=not args.exclude_head_tilt,
         lidblink_default=args.lidblink_default,
         invert_axes=args.invert_axis or [],
         audio_sr=args.audio_sr,
@@ -494,8 +498,10 @@ def build_parser():
     p_conv = sub.add_parser("convert", parents=[common], help="Convert matched (motion, audio) pairs")
     p_conv.add_argument("--calibration-file", default=None, help="Defaults to <out-dir>/calibration.json")
     p_conv.add_argument("--control-hz", type=float, default=20.0, help="Output control rate for servo signals")
-    p_conv.add_argument("--include-headroll", action="store_true",
-                         help="Also output HEADROLL (only if your Ohbot build has that 8th servo)")
+    p_conv.add_argument("--exclude-head-tilt", action="store_true",
+                         help="Drop HEADTILT and train a 7-axis model instead (only needed for Ohbot "
+                              "builds without the 8th servo fitted -- HEADTILT is a harmless no-op there, "
+                              "so this is rarely necessary)")
     p_conv.add_argument("--lidblink-default", type=float, default=8.0,
                          help="Constant LIDBLINK value in 0-10 units (see limitations in module docstring)")
     p_conv.add_argument("--invert-axis", action="append",

@@ -99,6 +99,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use the digital OhBot (simulator window) instead of hardware.",
     )
     parser.add_argument(
+        "--no-gesture-model",
+        action="store_true",
+        help="Force the AI gesture model off for this run, overriding "
+             "config.json's speech.gesture.enabled (scripted mouth track is used instead).",
+    )
+    parser.add_argument(
         "--serve",
         action="store_true",
         help="Run the WebSocket control server for the GUI instead of the console app.",
@@ -127,10 +133,18 @@ def _try_load_config():
         return None
 
 
-async def _scripted_demo(text: str, chunk_size: int, console: bool = False, sim: bool = False) -> None:
+async def _scripted_demo(
+    text: str,
+    chunk_size: int,
+    console: bool = False,
+    sim: bool = False,
+    no_gesture_model: bool = False,
+) -> None:
     from .audio.keyboard import KeyListener
 
     cfg = _try_load_config()
+    if no_gesture_model and cfg is not None:
+        cfg.speech.gesture.enabled = False
     llm_client = ScriptedLLMClient(text, chunk_size=chunk_size)
     controller = make_controller(force_console=console, sim=sim, cfg=cfg)
     pipeline = RobotPipeline(llm_client=llm_client, controller=controller)
@@ -441,11 +455,22 @@ async def main() -> None:
         # The CLI --sim/--console flags choose the server's *default* controller; a
         # session_start RPC can still override it per session.
         default_controller = "sim" if args.sim else "console" if args.console else "virtual"
-        await serve(host=args.host, port=args.port, default_controller=default_controller)
+        await serve(
+            host=args.host,
+            port=args.port,
+            default_controller=default_controller,
+            no_gesture_model=args.no_gesture_model,
+        )
         return
 
     if args.text is not None:
-        await _scripted_demo(args.text, args.chunk_size, console=args.console, sim=args.sim)
+        await _scripted_demo(
+            args.text,
+            args.chunk_size,
+            console=args.console,
+            sim=args.sim,
+            no_gesture_model=args.no_gesture_model,
+        )
         return
 
     from .config import load_config
@@ -456,6 +481,9 @@ async def main() -> None:
         print(f"error: {exc}")
         return
 
+    if args.no_gesture_model:
+        cfg.speech.gesture.enabled = False
+
     choice = _prompt_mode()
     if choice == "1":
         await _run_gemini(cfg, console=args.console, sim=args.sim)
@@ -464,14 +492,26 @@ async def main() -> None:
     elif choice == "3":
         text = input("Scripted text: ").strip()
         if text:
-            await _scripted_demo(text, chunk_size=24, console=args.console, sim=args.sim)
+            await _scripted_demo(
+                text,
+                chunk_size=24,
+                console=args.console,
+                sim=args.sim,
+                no_gesture_model=args.no_gesture_model,
+            )
     else:
         try:
             script = _load_example_script()
         except FileNotFoundError as exc:
             print(f"error: {exc}")
             return
-        await _scripted_demo(script, chunk_size=24, console=args.console, sim=args.sim)
+        await _scripted_demo(
+            script,
+            chunk_size=24,
+            console=args.console,
+            sim=args.sim,
+            no_gesture_model=args.no_gesture_model,
+        )
 
 
 if __name__ == "__main__":

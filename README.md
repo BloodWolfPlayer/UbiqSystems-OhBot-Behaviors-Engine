@@ -173,7 +173,7 @@ Three entry points, each runnable with `python -m <module> --help`.
 ### `python -m obot` — the full chat pipeline
 
 ```bash
-python -m obot [--text "..."] [--chunk-size N] [--console] [--sim]
+python -m obot [--text "..."] [--chunk-size N] [--console] [--sim] [--no-gesture-model]
 ```
 
 | Flag | Default | What it does |
@@ -182,6 +182,7 @@ python -m obot [--text "..."] [--chunk-size N] [--console] [--sim]
 | `--chunk-size N` | `24` | Characters per chunk fed to the `StreamProcessor` by the scripted LLM source (only relevant with `--text`) — smaller values exercise streaming/token-boundary edge cases harder. |
 | `--console` | off | Force `ConsoleObotController`: prints what the robot *would* do, needs no `ohbot` library, servos, or audio device. |
 | `--sim` | off | Use the digital OhBot (simulator window) instead of real hardware. See [Running without the robot](#running-without-the-robot). |
+| `--no-gesture-model` | off | Force the AI gesture model off for this run, overriding `config.json`'s `speech.gesture.enabled`. The scripted RMS-envelope mouth/motion track is used instead. |
 
 With no flags, `python -m obot` prompts for a backend (Gemini / remote Ollama / scripted demo / example script) and starts the full voice session — see [Session controls](#session-controls) and [Microphone input](#microphone-input).
 
@@ -208,6 +209,7 @@ python -m obot.ml <checkpoint> <wav> [--control-hz HZ] [--device cpu|cuda] [--in
 
 | Flag | Default | What it does |
 |---|---|---|
+| `--no-gesture-model` | — | if used the ml model will be disabled |
 | `checkpoint` (positional) | — | Path to a `train.py` checkpoint, e.g. `mlBehaviour/training_run/best_model.pt`. |
 | `wav` (positional) | — | Audio file to play and gesture along to. |
 | `--control-hz` | `20.0` | Must match the `--control-hz` the checkpoint was trained with (`beat2_to_ohbot.py`). |
@@ -317,17 +319,21 @@ Then click **Launch engine** (or **Attach**), and the GUI drives everything belo
 The GUI doesn't re-implement any of the engine. Instead the engine exposes itself over a local WebSocket and the GUI is a thin client. Start the server with:
 
 ```bash
-python -m obot --serve                 # headless "virtual" controller, ws://127.0.0.1:8765
-python -m obot --serve --console       # no motion/audio (fastest; good for protocol tests)
-python -m obot --serve --sim           # default controller opens the tkinter face window
-python -m obot --serve --port 9000     # pick the port
+python -m obot --serve                        # headless "virtual" controller, ws://127.0.0.1:8765
+python -m obot --serve --console              # no motion/audio (fastest; good for protocol tests)
+python -m obot --serve --sim                  # default controller opens the tkinter face window
+python -m obot --serve --port 9000            # pick the port
+python -m obot --serve --no-gesture-model     # force the AI gesture model off for every session
 ```
 
 It binds to `127.0.0.1` only (no auth by design; LAN/Pi mode is a later milestone).
 `--sim`/`--console` set the **default** controller; a `session_start` call can override
 it per session (`virtual`, `sim`, `hardware`, or `console`). `virtual` runs the full
 motor mixer and real TTS with no window and streams joint positions on the `joints`
-event topic, so a GUI can draw the face itself.
+event topic, so a GUI can draw the face itself. `--no-gesture-model` is applied once
+at startup (there's no per-session override, and no GUI control for it yet) — it's
+the flag to reach for when the GUI keeps driving motion from the AI model regardless
+of what `config.json` says.
 
 **Protocol.** Requests `{"type":"call","id":1,"method":"...","params":{...}}` get a
 `{"type":"result","id":1,"ok":true,"data":{...}}` (or `"ok":false,"error":"..."`).

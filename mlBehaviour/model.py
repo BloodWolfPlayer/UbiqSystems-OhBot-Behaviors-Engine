@@ -8,9 +8,11 @@ on a handful of clips.
 
 Architecture: a couple of Conv1d layers (to look at local audio context)
 feeding a single-layer GRU (to give it some memory across time), then a
-linear head mapping to the 7 (or 8, with HEADROLL) Ohbot axes. Output is
-squashed with sigmoid and scaled to [0, 10] to match Ohbot's native range
-and the training targets produced by beat2_to_ohbot.py.
+linear head mapping to the Ohbot axes -- 8 by default (7 if the data was
+converted with --exclude-head-tilt; n_axes is inferred from the data, see
+ohbot_dataset.py). Output is squashed with sigmoid and scaled to [0, 10]
+to match Ohbot's native range and the training targets produced by
+beat2_to_ohbot.py.
 """
 
 import torch

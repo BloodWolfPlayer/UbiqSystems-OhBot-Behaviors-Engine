@@ -18,7 +18,7 @@ python beat2_to_ohbot.py convert --beat2-root ./BEAT2 --out-dir ./ohbot_data --c
 Files:
 - `features.py` -- log-mel spectrogram extraction, frame-aligned to your control_hz (pure numpy, tested)
 - `ohbot_dataset.py` -- PyTorch `Dataset` reading `manifest.csv`/`clips/*.npz` from `beat2_to_ohbot.py`
-- `model.py` -- small Conv1d + GRU model, outputs 7 (or 8) servo values in [0, 10]
+- `model.py` -- small Conv1d + GRU model, outputs 8 servo values in [0, 10] (7 if converted with `--exclude-head-tilt`)
 - `train.py` -- training loop, with a **pipeline smoke test** built in
 
 ## Install
@@ -88,6 +88,28 @@ robot's servos directly frame-by-frame via `ObotController.drive_pose()` /
 `release_pose()` (in `src/obot/robot/controller.py`) -- new endpoints that
 bypass the offset/lip mixer and set an absolute joint target instead, still
 slew-limited by the same motor mixer thread everything else uses.
+
+## Step 4: sanity-check a converted clip in the GUI visualizer
+
+Before trusting the extraction (or feeding it to `train.py`), you can watch a
+converted clip play back in the dotnet GUI's visualizer -- the same view used
+for live conversations, driven here from ground-truth training data instead.
+
+```bash
+python -m obot --serve                                          # terminal 1
+# launch the GUI (gui/), connect, and press Start on the Dashboard (any backend)
+
+python -m obot.ml.replay_dataset --list                          # browse clip_ids
+python -m obot.ml.replay_dataset --clip 10_kieks_0_103_103        # terminal 2
+```
+
+This streams `set_joint` calls over the same WebSocket protocol the GUI uses,
+frame-by-frame at the clip's `control_hz`, so you can see head/eye/lip motion
+exactly as `beat2_to_ohbot.py` extracted and calibrated it -- useful for
+catching axis/sign mistakes (see the module docstring's "Known limitations")
+before they get baked into a training run. It also plays the clip's matched
+audio locally by default (`--no-audio` to skip), so you can correlate motion
+against what the speaker was actually saying.
 
 ## What's NOT covered yet (next steps)
 
