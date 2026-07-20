@@ -30,7 +30,7 @@ public class ConfigSerializationTests
     {
         var cfg = LoadExample();
 
-        // Every section maps 1:1 — nothing fell into an extension bag.
+        // Every section maps 1:1  nothing fell into an extension bag.
         Assert.True(cfg.Extra is null or { Count: 0 });
         Assert.True(cfg.OllamaSsh.Extra is null or { Count: 0 });
         Assert.True(cfg.Audio.Extra is null or { Count: 0 });
@@ -43,6 +43,7 @@ public class ConfigSerializationTests
         Assert.True(cfg.Speech.Tts.Kokoro.Extra is null or { Count: 0 });
         Assert.True(cfg.Speech.Tts.Gtts.Extra is null or { Count: 0 });
         Assert.True(cfg.Speech.Mouth.Extra is null or { Count: 0 });
+        Assert.True(cfg.Speech.Gesture.Extra is null or { Count: 0 });
         Assert.True(cfg.Motion.Extra is null or { Count: 0 });
         Assert.True(cfg.Behaviors.Extra is null or { Count: 0 });
         foreach (var (_, module) in cfg.Behaviors.Modules())

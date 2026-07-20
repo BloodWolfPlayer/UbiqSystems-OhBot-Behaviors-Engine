@@ -1,6 +1,6 @@
 """A tiny, thread-safe publish/subscribe bus for engine observability.
 
-The engine has always narrated itself with ``print()``. That stays — but the
+The engine has always narrated itself with ``print()``. That stays  but the
 control server (``python -m obot --serve``) also needs the *data* behind those
 lines so it can push structured events to a GUI over the WebSocket. Rather than
 thread a bus object through every controller, behavior and speech call site,

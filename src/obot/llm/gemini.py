@@ -112,8 +112,8 @@ class GeminiLLMClient:
                 except httpx.HTTPError as exc:
                     raise GeminiAPIError(f"network error while streaming: {exc}") from exc
         finally:
-            # Persist whatever was generated — even if the stream was closed early by an
-            # interrupt or errored partway — so history reflects what the model actually
+            # Persist whatever was generated  even if the stream was closed early by an
+            # interrupt or errored partway  so history reflects what the model actually
             # produced this turn.
             if collected:
                 self._contents.append({"role": "model", "parts": [{"text": "".join(collected)}]})

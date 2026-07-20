@@ -48,7 +48,7 @@ def open_ollama_tunnel(cfg: OllamaSSHConfig) -> Iterator[int]:
     try:
         forwarder.start()
     except BaseSSHTunnelForwarderError as exc:
-        raise SSHTunnelError(f"could not reach {cfg.host}:{cfg.port} — {exc}") from exc
+        raise SSHTunnelError(f"could not reach {cfg.host}:{cfg.port}  {exc}") from exc
     except Exception as exc:
         raise SSHTunnelError(f"failed to open SSH tunnel: {exc}") from exc
 

@@ -11,7 +11,7 @@ public sealed record VoskModelOption(string DisplayName, string Url, string Fold
 /// <summary>
 /// Downloads a prebuilt Vosk speech-to-text model from alphacephei.com and unzips it into
 /// <c>ohbotData/vosk/</c> (alongside the Piper/Kokoro TTS assets, which use the same
-/// repo-root-relative convention) — no terminal, no manual unzip-and-point-config-at-it
+/// repo-root-relative convention)  no terminal, no manual unzip-and-point-config-at-it
 /// dance. Mirrors <see cref="PythonEnvironmentService"/>'s download+progress shape so the
 /// GUI can reuse the same <see cref="SetupProgress"/> record and progress-bar pattern.
 /// </summary>
@@ -22,19 +22,19 @@ public sealed class VoskModelSetupService
     public static IReadOnlyList<VoskModelOption> Catalog { get; } = new[]
     {
         new VoskModelOption(
-            "English — fast (~40 MB, good for the Pi)",
+            "English/fast (~40 MB, good for the Pi)",
             "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
             "vosk-model-small-en-us-0.15"),
         new VoskModelOption(
-            "English — accurate (~1.8 GB)",
+            "English/accurate (~1.8 GB)",
             "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22.zip",
             "vosk-model-en-us-0.22"),
         new VoskModelOption(
-            "German — fast (~45 MB, good for the Pi)",
+            "German/fast (~45 MB, good for the Pi)",
             "https://alphacephei.com/vosk/models/vosk-model-small-de-0.15.zip",
             "vosk-model-small-de-0.15"),
         new VoskModelOption(
-            "German — accurate (~1.9 GB)",
+            "German/accurate (~1.9 GB)",
             "https://alphacephei.com/vosk/models/vosk-model-de-0.21.zip",
             "vosk-model-de-0.21"),
     };
@@ -87,7 +87,7 @@ public sealed class VoskModelSetupService
             Directory.Delete(extractTmp, recursive: true);
             File.Delete(zipPath);
             throw new InvalidOperationException(
-                $"extracted archive did not contain the expected 'am/' folder — got: {string.Join(", ", topLevelDirs.Select(Path.GetFileName))}");
+                $"extracted archive did not contain the expected 'am/' folder  got: {string.Join(", ", topLevelDirs.Select(Path.GetFileName))}");
         }
 
         if (Directory.Exists(modelDir)) Directory.Delete(modelDir, recursive: true);

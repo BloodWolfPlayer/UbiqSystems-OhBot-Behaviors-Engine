@@ -52,7 +52,7 @@ public partial class EmotionOptionViewModel : ObservableObject
 /// Manual motor control: jog each of the eight joints with a slider and watch its live
 /// position, for testing/calibrating the servos without going through a conversation.
 /// "Enable" snapshots every joint at its current pose and holds it there (no jump); each
-/// slider drag then overrides that joint in the engine's motor mixer — ambient behaviors
+/// slider drag then overrides that joint in the engine's motor mixer  ambient behaviors
 /// and speech keep running on any joint you haven't touched. "Release" hands every joint
 /// back to automatic control. Requires a running session (any backend/controller).
 /// </summary>
@@ -146,7 +146,7 @@ public partial class ManualControlViewModel : ObservableObject
     {
         if (!CanEnable) return;
         // Snapshot first (while still non-editable, so this doesn't fire jog RPCs), then
-        // flip the mode on and hold every joint exactly where it already is — no jump.
+        // flip the mode on and hold every joint exactly where it already is  no jump.
         // No ConfigureAwait(false) here: continuations must stay on the UI thread
         // because they touch UI-bound state (same in the other commands below).
         foreach (var joint in Joints) joint.Target = joint.Current;
@@ -155,7 +155,7 @@ public partial class ManualControlViewModel : ObservableObject
         {
             foreach (var joint in Joints)
                 await _api.SetJointAsync(joint.Name, joint.Target);
-            _logs.Append("info", "manual joint control enabled — behaviors overridden until released");
+            _logs.Append("info", "manual joint control enabled  behaviors overridden until released");
         }
         catch (Exception ex)
         {
@@ -285,8 +285,8 @@ public partial class ManualControlViewModel : ObservableObject
 
     /// <summary>Mirrors the engine's currently-active emotion from get_state / session
     /// start / stop (called by the shell alongside <see cref="NotifySessionActive"/>).
-    /// Unlike the live "emotion" event below, this value always names a real pose — see
-    /// ObotController.current_emotion on the engine side — so it needs no validation.</summary>
+    /// Unlike the live "emotion" event below, this value always names a real pose  see
+    /// ObotController.current_emotion on the engine side  so it needs no validation.</summary>
     public void SyncEmotion(string emotion) => ActiveEmotion = emotion;
 
     public void OnConnectionChanged(bool connected)

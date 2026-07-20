@@ -188,13 +188,13 @@ class AIGestureSettings:
     """
 
     enabled: bool = False
-    #* Path to a train.py checkpoint, e.g. mlBehaviour/training_run/best_model.pt.
+    # Path to a train.py checkpoint, e.g. mlBehaviour/training_run/best_model.pt.
     checkpoint_path: str = ""
-    #* Must match the --control-hz the checkpoint was trained with (beat2_to_ohbot.py).
+    # Must match the --control-hz the checkpoint was trained with (beat2_to_ohbot.py).
     control_hz: float = 20.0
     device: str = "cpu"  # torch device for inference: "cpu" or "cuda"
-    #* Scales predicted movement around rest position: 1.0 = model output
-    #* unchanged, >1 exaggerates the gestures, <1 dampens them.
+    # Scales predicted movement around rest position: 1.0 = model output
+    # unchanged, >1 exaggerates the gestures, <1 dampens them.
     intensity: float = 1.0
 
     @classmethod
@@ -207,7 +207,7 @@ class SpeechSettings:
     tts: TTSSettings = field(default_factory=TTSSettings)
     mouth: MouthSettings = field(default_factory=MouthSettings)
     gesture: AIGestureSettings = field(default_factory=AIGestureSettings)
-    #* sounddevice output device index; None = system default speakers.
+    # sounddevice output device index; None = system default speakers.
     output_device_index: int | None = None
     # When interrupted, playback runs to the end of the current word plus this pad.
     word_stop_pad_s: float = 0.06

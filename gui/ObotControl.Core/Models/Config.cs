@@ -125,10 +125,27 @@ public sealed class MouthConfig
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
+/// <summary>Mirrors AIGestureSettings (speech/config.py): the audio-driven gesture model
+/// that drives the servos straight from the speech waveform.</summary>
+public sealed class GestureConfig
+{
+    public bool Enabled { get; set; }
+    public string CheckpointPath { get; set; } = "";
+
+    [JsonPropertyName("control_hz")]
+    public double ControlHz { get; set; } = 20.0;
+
+    public string Device { get; set; } = "cpu";
+    public double Intensity { get; set; } = 1.0;
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
 public sealed class SpeechConfig
 {
     public TtsConfig Tts { get; set; } = new();
     public MouthConfig Mouth { get; set; } = new();
+    public GestureConfig Gesture { get; set; } = new();
     public int? OutputDeviceIndex { get; set; }
 
     [JsonPropertyName("word_stop_pad_s")]

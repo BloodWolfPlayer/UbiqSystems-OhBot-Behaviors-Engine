@@ -11,7 +11,7 @@ public enum PythonSetupStatusKind { Pending, Busy, Ready, Error }
 /// Owns Python environment discovery/provisioning so the engine can be launched without
 /// anyone touching a terminal. Prefers an existing venv or system Python 3.12 already on
 /// this machine (surfaced as a picker when more than one is found); "set up automatically"
-/// — download + silent-install a private Python, then build a venv from it — is always the
+///  download + silent-install a private Python, then build a venv from it  is always the
 /// last option in the list. Runs standalone, before any engine connection exists.
 /// </summary>
 public partial class PythonSetupViewModel : ObservableObject
@@ -120,7 +120,7 @@ public partial class PythonSetupViewModel : ObservableObject
         {
             IsReady = true;
             IsError = false;
-            StatusText = $"Ready — using {candidate.DisplayName}";
+            StatusText = $"Ready  using {candidate.DisplayName}";
         }
         else if (candidate is null)
         {

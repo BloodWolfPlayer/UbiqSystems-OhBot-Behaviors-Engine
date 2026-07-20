@@ -48,7 +48,7 @@ class InterruptController:
         try:
             self._loop.call_soon_threadsafe(_set)
         except RuntimeError:
-            # Loop already closed (shutdown race) — nothing left to interrupt.
+            # Loop already closed (shutdown race)  nothing left to interrupt.
             pass
 
     def is_set(self) -> bool:

@@ -14,7 +14,7 @@
         <TextBlock Text="{Binding StatusText}" Foreground="White"/>
       </Border>
 
-      <TextBlock Text="Automatic setup is only available on Windows — see README.md for manual setup."
+      <TextBlock Text="Automatic setup isn't available on this platform. See README.md for manual setup."
                  Foreground="#C46464" IsVisible="{Binding !IsSupported}"/>
 
       <Grid ColumnDefinitions="*,Auto,Auto,Auto" IsVisible="{Binding IsSupported}">

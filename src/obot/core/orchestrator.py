@@ -96,7 +96,7 @@ class RobotPipeline:
         interrupted = interrupt is not None and interrupt.is_set()
         unspoken = generated[len(spoken):] if interrupted else []
         if interrupted:
-            # Optional protocol method — Gemini/Ollama implement it, Scripted no-ops.
+            # Optional protocol method  Gemini/Ollama implement it, Scripted no-ops.
             register = getattr(self.llm_client, "register_interruption", None)
             if callable(register):
                 register(spoken, unspoken)

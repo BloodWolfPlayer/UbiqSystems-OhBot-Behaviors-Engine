@@ -25,7 +25,7 @@
         <StackPanel Spacing="8">
           <TextBlock Text="Credentials &amp; hardware" FontWeight="Bold" FontSize="15"/>
           <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto">
-            <TextBlock Grid.Row="0" Grid.Column="0" Text="OhBot COM port" VerticalAlignment="Center"/>
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="OhBot serial port" VerticalAlignment="Center"/>
             <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding OhbotPort}" Width="140" HorizontalAlignment="Left"
                      ToolTip.Tip="{x:Static core:HelpText.ComPort}"/>
             <TextBlock Grid.Row="1" Grid.Column="0" Text="Gemini API key" VerticalAlignment="Center"/>
@@ -96,15 +96,15 @@
           </StackPanel>
           <TextBox Text="{Binding TestText}" Watermark="Test sentence"/>
           <Grid ColumnDefinitions="90,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
-            <TextBlock Grid.Row="0" Grid.Column="0" Text="Edge ★" VerticalAlignment="Center" ToolTip.Tip="Microsoft Edge neural voices — free, online, best quality."/>
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="Edge ★" VerticalAlignment="Center" ToolTip.Tip="Microsoft Edge neural voices  free, online, best quality."/>
             <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding EdgeVoices}" SelectedItem="{Binding EdgeVoice}" HorizontalAlignment="Stretch"/>
             <Button Grid.Row="0" Grid.Column="2" Content="Test" Command="{Binding TestVoiceCommand}" CommandParameter="edge"
                     ToolTip.Tip="{x:Static core:HelpText.TestVoice}"/>
-            <TextBlock Grid.Row="1" Grid.Column="0" Text="Kokoro ★" VerticalAlignment="Center" ToolTip.Tip="Kokoro — offline neural voice, best local quality."/>
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Kokoro ★" VerticalAlignment="Center" ToolTip.Tip="Kokoro  offline neural voice, best local quality."/>
             <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding KokoroVoices}" SelectedItem="{Binding KokoroVoice}" HorizontalAlignment="Stretch"/>
             <Button Grid.Row="1" Grid.Column="2" Content="Test" Command="{Binding TestVoiceCommand}" CommandParameter="kokoro"
                     ToolTip.Tip="{x:Static core:HelpText.TestVoice}"/>
-            <TextBlock Grid.Row="2" Grid.Column="0" Text="gTTS" VerticalAlignment="Center" ToolTip.Tip="Google Translate TTS — free, online. The value is the accent (TLD)."/>
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="gTTS" VerticalAlignment="Center" ToolTip.Tip="Google Translate TTS  free, online. The value is the accent (TLD)."/>
             <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding GttsAccents}" SelectedItem="{Binding GttsAccent}" HorizontalAlignment="Stretch"/>
             <Button Grid.Row="2" Grid.Column="2" Content="Test" Command="{Binding TestVoiceCommand}" CommandParameter="gtts"
                     ToolTip.Tip="{x:Static core:HelpText.TestVoice}"/>

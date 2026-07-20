@@ -9,7 +9,7 @@ namespace ObotControl.App.Views;
 /// Draws the OhBot head from the live <see cref="JointPose"/> with a pseudo-3D look.
 ///
 /// * HeadTurn <b>yaws</b> the head: the features shift with parallax, the far side of
-///   the shell foreshortens, and the shading moves — reading as a real turn rather
+///   the shell foreshortens, and the shading moves  reading as a real turn rather
 ///   than a flat slide. HeadNod raises/dips the whole assembly. HeadTilt <b>rolls</b>
 ///   the head shell and features (not the neck, which stays upright) about the head
 ///   center, like the roll servo mounted between neck and shell on the real robot.

@@ -53,7 +53,7 @@ def _require_audio() -> None:
             missing.append("SpeechRecognition")
         raise AudioInputError(
             f"{', '.join(missing)} not installed. "
-            "Run: pip install -r requirements-windows.txt (or your platform's file)."
+            "Run: pip install -r requirements/windows.txt (or requirements/linux.txt / pi.txt)."
         )
 
 
@@ -62,7 +62,7 @@ def _require_audio() -> None:
 # --------------------------------------------------------------------------------------
 
 # Windows exposes every physical mic once *per host API* (MME, DirectSound, WASAPI,
-# WDM-KS), with MME additionally truncating names to 31 chars — that is why one JBL mic
+# WDM-KS), with MME additionally truncating names to 31 chars  that is why one JBL mic
 # showed up four times. Restricting enumeration to a single, modern host API collapses
 # those aliases to one clean entry each. Order = most-preferred first.
 # TODO(@Sir-Kuhnhero): verify device enumeration on Linux.
@@ -178,7 +178,7 @@ def stream_input_level(
 def test_input_device(device_index: int) -> None:
     """Record ~3s from the device with a live level meter, then play it back.
 
-    Lets the user confirm the right mic is selected and that capture actually works —
+    Lets the user confirm the right mic is selected and that capture actually works 
     the level bar moves when you talk, and you hear yourself on playback.
     """
     if not _HAVE_NUMPY:
@@ -285,7 +285,7 @@ class SttBackend(ABC):
     def transcribe(self, recognizer: "sr.Recognizer", audio: "sr.AudioData") -> str:
         ...
 
-    # Streaming API — only meaningful when ``supports_streaming`` is True.
+    # Streaming API  only meaningful when ``supports_streaming`` is True.
     def new_stream(self, sample_rate: int):
         """Create a per-phrase streaming recognizer. Override in streaming backends."""
         raise NotImplementedError
@@ -377,7 +377,7 @@ class VoskBackend(SttBackend):
         )
 
     def transcribe(self, _recognizer, audio) -> str:
-        # Resample to 16 kHz / mono 16-bit — the sample rate Vosk models are trained on.
+        # Resample to 16 kHz / mono 16-bit  the sample rate Vosk models are trained on.
         # Passing the raw device rate (44100, 48000…) gives garbled / empty results.
         raw = audio.get_raw_data(
             convert_rate=self._VOSK_SAMPLE_RATE, convert_width=2
@@ -469,7 +469,7 @@ class AudioInput:
     One capture thread owns the sounddevice stream and loops: wait for speech onset, record
     the phrase until silence, transcribe, and push the text onto an asyncio queue that
     :meth:`next_utterance` awaits. While the bot is speaking (:meth:`set_speaking`),
-    detecting onset *also* fires the ``on_barge_in`` callback immediately — that's the
+    detecting onset *also* fires the ``on_barge_in`` callback immediately  that's the
     voice-interrupt path, distinct from the keyboard path.
 
     Modes (:meth:`set_mode`): ``vad`` = open mic / continuous, ``muted`` = ignore the
@@ -517,7 +517,7 @@ class AudioInput:
         self.on_barge_in: Callable[[], None] | None = None
         # Fired when the user starts / stops talking, so the behavior manager can
         # switch the robot into its attentive "listening" pose (nodding along).
-        # Called from the capture thread — handlers must be thread-safe.
+        # Called from the capture thread  handlers must be thread-safe.
         self.on_user_speech_start: Callable[[], None] | None = None
         self.on_user_speech_end: Callable[[], None] | None = None
         # Fired repeatedly with the interim transcript while the user is still speaking
@@ -613,7 +613,7 @@ class AudioInput:
                 self._energy_threshold = max(self._MIN_THRESHOLD, silence_rms * 1.5)
             print(f"[mic] calibrated (onset threshold {int(self._energy_threshold)}). Listening.")
             events.emit(events.LOG, {"level": "info",
-                                     "message": f"microphone open on '{device_name}' — "
+                                     "message": f"microphone open on '{device_name}'  "
                                                 f"listening ({self._mode}, onset {int(self._energy_threshold)})"})
 
             with sd.InputStream(**stream_kwargs) as stream:
@@ -627,7 +627,7 @@ class AudioInput:
                     except AudioInputError as exc:
                         print(f"[mic] {exc}")
                         # Surface STT failures (e.g. the Google endpoint erroring) to the GUI
-                        # instead of silently swallowing them — otherwise the mic looks dead.
+                        # instead of silently swallowing them  otherwise the mic looks dead.
                         events.emit(events.ERROR, {"where": "speech-to-text", "message": str(exc)})
                         text = ""
                     if armed_ptt:
@@ -660,7 +660,7 @@ class AudioInput:
         # Phase A: wait for onset (also the barge-in trigger). Every frame read here is
         # kept in a short rolling pre-buffer so that once onset fires, the loud frames
         # that proved it (plus a touch of leading silence) are still available instead
-        # of only the single frame where the run happened to cross the threshold —
+        # of only the single frame where the run happened to cross the threshold 
         # otherwise the start of the word that triggered detection gets cut off.
         loud_run = 0
         preroll: deque[bytes] = deque(maxlen=self._PREROLL_FRAMES)

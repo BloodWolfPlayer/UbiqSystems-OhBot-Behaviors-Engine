@@ -6,7 +6,7 @@ namespace ObotControl.Core.ViewModels;
 /// <summary>
 /// Live joint positions (0..10, 5 = rest) mirrored from <c>joints</c> events, for the
 /// face preview. Both GUIs bind their face drawing to these properties and redraw on
-/// change — the ~80 lines of face geometry live in each view, the numbers live here.
+/// change  the ~80 lines of face geometry live in each view, the numbers live here.
 /// </summary>
 public partial class JointPose : ObservableObject
 {

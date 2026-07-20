@@ -2,16 +2,16 @@
 
 Three engines plus a fallback chain (best voice first):
 
-* :class:`GeminiTTS` — Google's Gemini TTS API. The most natural voices, but
+* :class:`GeminiTTS`  Google's Gemini TTS API. The most natural voices, but
   the free tier allows only ~3 requests/minute, so in practice it covers the
   first sentences of a conversation and the chain drops through afterwards.
-* :class:`PiperTTS` — neural TTS running fully offline (Windows and the Pi).
+* :class:`PiperTTS`  neural TTS running fully offline (Windows and the Pi).
   Close-to-Gemini quality with zero rate limits; the everyday workhorse.
-* :class:`LocalTTS` — SAPI on Windows / espeak on the Pi. Robotic, but
+* :class:`LocalTTS`  SAPI on Windows / espeak on the Pi. Robotic, but
   dependency-free and effectively cannot fail; the last resort.
 
 All return :class:`SynthResult` (mono int16 samples + sample rate) so the rest
-of the stack — playback, mouth animation, word timeline — is engine-agnostic.
+of the stack  playback, mouth animation, word timeline  is engine-agnostic.
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ class GeminiTTS(TTSEngine):
 
         s = self._settings
         # A style prompt ("Say this like a cheery news anchor:") steers delivery and
-        # pace — Gemini TTS takes direction from the text itself, not from parameters.
+        # pace  Gemini TTS takes direction from the text itself, not from parameters.
         # A directive is REQUIRED: with bare conversational text the TTS model
         # sometimes tries to *answer* it and the API rejects the call with a 400.
         style = s.style.strip() or "Say:"
@@ -134,14 +134,14 @@ class PiperTTS(TTSEngine):
 
     The voice model (a ~60-100 MB .onnx file) lives in ``ohbotData/piper/`` and
     is downloaded automatically on first use (configurable). Synthesis runs on
-    a worker thread; the ONNX session is loaded once and reused — Piper handles
+    a worker thread; the ONNX session is loaded once and reused  Piper handles
     sentence-after-sentence synthesis without the SAPI-style COM fragility.
     """
 
     name = "piper"
 
     # Default location for downloaded voices, relative to the repo root
-    # (the app runs from there — the ohbot library itself requires it).
+    # (the app runs from there  the ohbot library itself requires it).
     VOICES_DIR = Path("ohbotData") / "piper"
 
     def __init__(self, settings: PiperTTSSettings) -> None:
@@ -249,8 +249,8 @@ class LocalTTS(TTSEngine):
 
     All synthesis runs on ONE dedicated worker thread, because SAPI's COM
     objects must stay in the apartment (thread) that created them. Windows
-    deliberately does not use pyttsx3 — its SAPI driver deadlocks on the second
-    ``runAndWait`` of a reused engine — and instead drives SAPI the same way
+    deliberately does not use pyttsx3  its SAPI driver deadlocks on the second
+    ``runAndWait`` of a reused engine  and instead drives SAPI the same way
     the ohbot library did (SpVoice writing into a SpFileStream per call), which
     is proven to run sentence after sentence. Synthesis writes a temp WAV that
     is loaded back as PCM.
@@ -271,7 +271,7 @@ class LocalTTS(TTSEngine):
 
     def close(self) -> None:
         # Drop the COM objects on the worker thread (their home apartment) before
-        # the executor goes away — releasing them from another thread at
+        # the executor goes away  releasing them from another thread at
         # interpreter shutdown makes SAPI exit uncleanly.
         def _release() -> None:
             self._backend = None
@@ -386,7 +386,7 @@ def _decode_mp3(data: bytes, target_rate: int = 24_000) -> tuple[np.ndarray, int
         import miniaudio
     except ImportError as exc:
         raise TTSError(
-            "miniaudio is not installed (pip install miniaudio) — needed to decode the "
+            "miniaudio is not installed (pip install miniaudio)  needed to decode the "
             "MP3 audio from the online voices (edge/gtts)."
         ) from exc
     try:

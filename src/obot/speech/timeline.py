@@ -4,7 +4,7 @@ Neither TTS engine reports word timestamps, so timing is estimated from the
 audio itself: the RMS envelope finds where speech actually starts and ends,
 and the words are distributed over that span weighted by their length. That
 is accurate enough to fire a [Nod] on the right word and to stop playback at
-a word boundary — and far better than the old "characters / 80" guess.
+a word boundary  and far better than the old "characters / 80" guess.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class SpeechTimeline:
         return self.words[-1].start_s if self.words else 0.0
 
     def word_end_after(self, t: float) -> float:
-        """End time of the word being voiced at time ``t`` — the stop boundary.
+        """End time of the word being voiced at time ``t``  the stop boundary.
 
         In a gap between words, the next word has not started, so ``t`` itself
         is a valid boundary and playback can stop right away.

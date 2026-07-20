@@ -18,14 +18,14 @@
                 ToolTip.Tip="{x:Static core:HelpText.ReleaseManualControl}"/>
         <Button Content="Center all" Command="{Binding CenterAllCommand}" IsEnabled="{Binding CanEdit}"
                 ToolTip.Tip="{x:Static core:HelpText.CenterAllJoints}"/>
-        <TextBlock Text="no active session — start one on the Dashboard first" Foreground="#E0A040"
+        <TextBlock Text="no active session  start one on the Dashboard first" Foreground="#E0A040"
                    VerticalAlignment="Center" IsVisible="{Binding !SessionActive}"/>
       </StackPanel>
 
       <Border Background="#141A22" CornerRadius="8" Padding="12" ToolTip.Tip="{x:Static core:HelpText.EmotionsPanel}">
         <StackPanel Spacing="8">
           <TextBlock Text="Emotions" FontWeight="Bold" FontSize="15"/>
-          <TextBlock Text="Activates that emotion's default mouth/eyes/nod pose — the same one the LLM's (Emotion) tags use — until you pick another." Foreground="#9FB2C8" TextWrapping="Wrap"/>
+          <TextBlock Text="Activates that emotion's default mouth/eyes/nod pose, the same one the LLM's (Emotion) tags use, until you pick another." Foreground="#9FB2C8" TextWrapping="Wrap"/>
           <ItemsControl ItemsSource="{Binding Emotions}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>

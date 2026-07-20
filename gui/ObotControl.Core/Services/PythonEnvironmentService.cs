@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Formats.Tar;
+using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
@@ -30,35 +32,75 @@ public sealed record PythonEnvironmentStatus
 
 /// <summary>
 /// Guarantees a working Python 3.12 environment for the engine without anyone touching a
-/// terminal. Two tiers, tried in order: (1) an existing venv or system Python 3.12 already
-/// on this machine (<see cref="DiscoverCandidatesAsync"/>), which <see cref="EnsureAsync"/>
-/// just installs the project's dependencies into; (2) a fully self-contained fallback that
-/// downloads the official python.org installer into a GUI-private folder, silently installs
-/// it (no admin prompt, doesn't touch PATH or any existing Python), and builds a venv from
-/// that. Windows only — <see cref="IsSupported"/> guards every entry point.
+/// terminal, on Windows and Linux alike (macOS rides the Linux code path). Two tiers,
+/// tried in order: (1) an existing venv or system Python 3.12 already on this machine
+/// (<see cref="DiscoverCandidatesAsync"/>), which <see cref="EnsureAsync"/> just installs
+/// the project's dependencies into; (2) a fully self-contained fallback that downloads an
+/// official CPython 3.12 build into a GUI-private folder the python.org installer on
+/// Windows (silent, no admin prompt, doesn't touch PATH or any existing Python), a
+/// python-build-standalone tarball on Linux/macOS and builds a venv from that.
+/// The engine pins 3.12 because the audio stack's prebuilt wheels are only reliable
+/// there (see README.md), which is exactly why tier 2 exists: Ubuntu 25+ ships a newer
+/// system Python, and the tarball provides 3.12 regardless.
 /// </summary>
 public sealed class PythonEnvironmentService
 {
     public const string PythonVersion = "3.12.10";
+
+    // Windows: the official python.org installer.
     private const string InstallerFileName = "python-3.12.10-amd64.exe";
     private const string DownloadUrl = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe";
     // Corruption check only (published on python.org/downloads/release/python-31210/);
     // authenticity comes from HTTPS to the official domain, same as get-pip.py/pyenv-win.
     private const string InstallerMd5 = "5eddb0b6f12c852725de071ae681dde4";
+
+    // Linux/macOS: a relocatable CPython from python-build-standalone (the same builds
+    // uv/rye install). Integrity comes from the .sha256 sidecar published per asset;
+    // authenticity from HTTPS to github.com, matching the Windows trust model above.
+    private const string StandaloneBuild = "20250409";
+    private const string StandaloneBaseUrl =
+        "https://github.com/astral-sh/python-build-standalone/releases/download";
+
     private const string VenvDirName = "OhBots";
 
     private static readonly HttpClient Http = new();
 
-    public bool IsSupported => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+    private static bool IsWindows => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+
+    public bool IsSupported =>
+        IsWindows
+        || RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+        || RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+    /// <summary>Whether tier 2 (download a private CPython) exists for this OS/arch. The
+    /// discovery/venv/pip tiers work on any supported OS regardless.</summary>
+    public static bool SupportsManagedInstall =>
+        IsWindows ? RuntimeInformation.OSArchitecture == Architecture.X64
+                  : StandaloneTriple() is not null;
 
     public static string ManagedRootDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ObotControl");
     public static string ManagedPythonDir => Path.Combine(ManagedRootDir, "Python", PythonVersion);
-    public static string ManagedPythonExe => Path.Combine(ManagedPythonDir, "python.exe");
+    public static string ManagedPythonExe => IsWindows
+        ? Path.Combine(ManagedPythonDir, "python.exe")
+        // install_only tarballs unpack to a single top-level "python/" folder.
+        : Path.Combine(ManagedPythonDir, "python", "bin", "python3");
+
+    /// <summary>The interpreter's path inside a venv on this platform
+    /// (<c>Scripts\python.exe</c> on Windows, <c>bin/python</c> elsewhere).</summary>
+    public static string VenvRelativePythonPath => IsWindows
+        ? Path.Combine("Scripts", "python.exe")
+        : Path.Combine("bin", "python");
+
+    /// <summary>Which requirements file this machine should install. Windows and Linux
+    /// have separate files because some deps are OS-specific; a Raspberry Pi adds the
+    /// GPIO stack on top.</summary>
+    public static string RequirementsFileName =>
+        IsWindows ? "windows.txt" : IsRaspberryPi() ? "pi.txt" : "linux.txt";
 
     // -- fast, local-only status check (drives startup gating) -------------------------
 
-    /// <summary>File-existence + pyvenv.cfg parse only — no subprocess, no network. Prefers
+    /// <summary>File-existence + pyvenv.cfg parse only  no subprocess, no network. Prefers
     /// <paramref name="rememberedPythonPath"/> if it still looks valid, else the first
     /// 3.12.x venv found directly under <paramref name="repoRoot"/>.</summary>
     public PythonEnvironmentStatus CheckStatus(string? repoRoot, string? rememberedPythonPath)
@@ -68,7 +110,7 @@ public sealed class PythonEnvironmentService
             return new PythonEnvironmentStatus
             {
                 IsReady = false,
-                Message = "Automatic Python setup is only available on Windows — see README.md for manual setup.",
+                Message = "Automatic Python setup isn't available on this platform  see README.md for manual setup.",
             };
         }
 
@@ -95,7 +137,7 @@ public sealed class PythonEnvironmentService
     private static PythonEnvironmentStatus Ready(string exe, string version) => new()
     {
         IsReady = true,
-        Message = $"Ready — Python {version}",
+        Message = $"Ready  Python {version}",
         Active = new PythonCandidate
         {
             Kind = PythonCandidateKind.ExistingVenv,
@@ -128,7 +170,7 @@ public sealed class PythonEnvironmentService
                 results.Add(new PythonCandidate
                 {
                     Kind = PythonCandidateKind.ExistingVenv,
-                    DisplayName = VenvDisplayName(exe, version) + (installed ? "" : " — project not installed yet"),
+                    DisplayName = VenvDisplayName(exe, version) + (installed ? "" : "  project not installed yet"),
                     PythonExePath = exe,
                     Version = version,
                     ObotInstalled = installed,
@@ -176,7 +218,7 @@ public sealed class PythonEnvironmentService
     {
         foreach (var dir in Directory.EnumerateDirectories(repoRoot))
         {
-            var exe = Path.Combine(dir, "Scripts", "python.exe");
+            var exe = Path.Combine(dir, VenvRelativePythonPath);
             var cfg = Path.Combine(dir, "pyvenv.cfg");
             if (!File.Exists(exe) || !File.Exists(cfg)) continue;
             var version = ReadVenvVersionFromCfg(cfg);
@@ -187,6 +229,8 @@ public sealed class PythonEnvironmentService
 
     private async Task<List<string>> DiscoverSystemInterpretersAsync(CancellationToken ct)
     {
+        if (!IsWindows) return DiscoverPosixInterpreters();
+
         var found = new List<string>();
 
         var (pyCode, pyOut) = await RunCaptureAsync("py", new[] { "-0p" }, null, ct).ConfigureAwait(false);
@@ -213,18 +257,75 @@ public sealed class PythonEnvironmentService
         return found.Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    /// <summary>PATH scan for the usual interpreter names  no subprocess needed. The
+    /// versioned name comes first so the pinned 3.12 wins; the generic names are still
+    /// offered because the caller version-probes and filters every hit anyway.</summary>
+    private static List<string> DiscoverPosixInterpreters()
+    {
+        var names = new[] { "python3.12", "python3", "python" };
+        var pathDirs = (Environment.GetEnvironmentVariable("PATH") ?? "")
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+
+        var found = new List<string>();
+        // Dedupe on the symlink target: /usr/bin/python3 is usually just an alias of
+        // /usr/bin/python3.12, and listing the same binary twice only confuses the picker.
+        var seenTargets = new HashSet<string>();
+        foreach (var name in names)
+        {
+            foreach (var dir in pathDirs)
+            {
+                var path = Path.Combine(dir, name);
+                if (!File.Exists(path)) continue;
+                if (!seenTargets.Add(ResolveRealPath(path))) continue;
+                found.Add(path);
+            }
+        }
+        return found;
+    }
+
+    private static string ResolveRealPath(string path)
+    {
+        try
+        {
+            var target = new FileInfo(path).ResolveLinkTarget(returnFinalTarget: true);
+            return target?.FullName ?? Path.GetFullPath(path);
+        }
+        catch (IOException)
+        {
+            return Path.GetFullPath(path);
+        }
+    }
+
+    private static bool IsRaspberryPi()
+    {
+        try
+        {
+            const string model = "/proc/device-tree/model";
+            return File.Exists(model) &&
+                   File.ReadAllText(model).Contains("Raspberry Pi", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     // -- ensure pipeline -------------------------------------------------------------------
 
     /// <summary>Makes <paramref name="candidate"/> usable: installs the project into an
     /// existing venv, or first creates <c>OhBots</c> from a base interpreter (a system
-    /// Python, or — for <see cref="PythonCandidateKind.ManagedAutoInstall"/> — a freshly
+    /// Python, or  for <see cref="PythonCandidateKind.ManagedAutoInstall"/>  a freshly
     /// downloaded private one) and installs into that.</summary>
     public async Task<PythonEnvironmentStatus> EnsureAsync(
         PythonCandidate candidate, string repoRoot, IProgress<SetupProgress> progress, CancellationToken ct)
     {
         if (!IsSupported)
         {
-            return new PythonEnvironmentStatus { IsReady = false, Message = "Automatic Python setup is only available on Windows." };
+            return new PythonEnvironmentStatus
+            {
+                IsReady = false,
+                Message = "Automatic Python setup isn't available on this platform  see README.md for manual setup.",
+            };
         }
 
         return candidate.Kind switch
@@ -252,6 +353,13 @@ public sealed class PythonEnvironmentService
             }
         }
 
+        return IsWindows
+            ? await InstallWindowsPythonAsync(progress, ct).ConfigureAwait(false)
+            : await InstallStandalonePythonAsync(progress, ct).ConfigureAwait(false);
+    }
+
+    private async Task<string> InstallWindowsPythonAsync(IProgress<SetupProgress> progress, CancellationToken ct)
+    {
         var cacheDir = Path.Combine(ManagedRootDir, "cache");
         Directory.CreateDirectory(cacheDir);
         var installerPath = Path.Combine(cacheDir, InstallerFileName);
@@ -297,6 +405,91 @@ public sealed class PythonEnvironmentService
         return ManagedPythonExe;
     }
 
+    /// <summary>Linux/macOS tier 2: download the python-build-standalone tarball for this
+    /// arch, verify it against its published .sha256 sidecar, and unpack it into the
+    /// GUI-private folder. No root, no PATH changes, works on any Ubuntu regardless of
+    /// which Python the distro ships.</summary>
+    private async Task<string> InstallStandalonePythonAsync(IProgress<SetupProgress> progress, CancellationToken ct)
+    {
+        var triple = StandaloneTriple() ?? throw new InvalidOperationException(
+            "no prebuilt Python 3.12 is published for this OS/architecture  see README.md for manual setup.");
+        var archive = $"cpython-{PythonVersion}+{StandaloneBuild}-{triple}-install_only.tar.gz";
+        var url = $"{StandaloneBaseUrl}/{StandaloneBuild}/{archive}";
+
+        var cacheDir = Path.Combine(ManagedRootDir, "cache");
+        Directory.CreateDirectory(cacheDir);
+        var tarPath = Path.Combine(cacheDir, archive);
+
+        progress.Report(new SetupProgress("download", "fetching the published checksum…"));
+        var expectedSha = await FetchExpectedSha256Async(url + ".sha256", ct).ConfigureAwait(false);
+
+        if (!File.Exists(tarPath) || !VerifySha256(tarPath, expectedSha))
+        {
+            progress.Report(new SetupProgress("download", $"downloading {archive}…", 0));
+            await DownloadFileAsync(url, tarPath, progress, ct).ConfigureAwait(false);
+            if (!VerifySha256(tarPath, expectedSha))
+            {
+                File.Delete(tarPath);
+                throw new InvalidOperationException("downloaded Python archive failed checksum verification");
+            }
+        }
+        else
+        {
+            progress.Report(new SetupProgress("download", "using cached archive", 100));
+        }
+
+        progress.Report(new SetupProgress("install", $"unpacking Python {PythonVersion}…"));
+        if (Directory.Exists(ManagedPythonDir)) Directory.Delete(ManagedPythonDir, recursive: true);
+        Directory.CreateDirectory(ManagedPythonDir);
+        await using (var file = File.OpenRead(tarPath))
+        await using (var gz = new GZipStream(file, CompressionMode.Decompress))
+        {
+            // TarFile preserves the exec bits and the bin/python* symlinks on Unix.
+            await TarFile.ExtractToDirectoryAsync(gz, ManagedPythonDir, overwriteFiles: true, ct).ConfigureAwait(false);
+        }
+        if (!File.Exists(ManagedPythonExe))
+        {
+            throw new InvalidOperationException($"archive unpacked but {ManagedPythonExe} is missing");
+        }
+
+        progress.Report(new SetupProgress("install", $"Python {PythonVersion} installed", 100));
+        return ManagedPythonExe;
+    }
+
+    private static string? StandaloneTriple()
+    {
+        var arch = RuntimeInformation.OSArchitecture switch
+        {
+            Architecture.X64 => "x86_64",
+            Architecture.Arm64 => "aarch64",
+            _ => null,
+        };
+        if (arch is null) return null;
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) return $"{arch}-unknown-linux-gnu";
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return $"{arch}-apple-darwin";
+        return null;
+    }
+
+    private static async Task<string> FetchExpectedSha256Async(string url, CancellationToken ct)
+    {
+        string text;
+        try
+        {
+            text = await Http.GetStringAsync(url, ct).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exc)
+        {
+            throw new InvalidOperationException($"could not fetch the archive checksum ({url}): {exc.Message}", exc);
+        }
+        // The sidecar is either a bare hex digest or "digest  filename".
+        var token = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        if (token is null || token.Length != 64 || !token.All(Uri.IsHexDigit))
+        {
+            throw new InvalidOperationException($"unexpected checksum file format at {url}");
+        }
+        return token;
+    }
+
     private async Task<PythonEnvironmentStatus> CreateVenvAndEnsureAsync(
         string basePython, string repoRoot, IProgress<SetupProgress> progress, CancellationToken ct)
     {
@@ -312,13 +505,21 @@ public sealed class PythonEnvironmentService
             }
         }
 
-        var venvPython = Path.Combine(venvDir, "Scripts", "python.exe");
+        var venvPython = Path.Combine(venvDir, VenvRelativePythonPath);
         if (!File.Exists(venvPython))
         {
             progress.Report(new SetupProgress("venv", $"creating {VenvDirName} virtual environment…"));
             var code = await RunProcessAsync(basePython, new[] { "-m", "venv", venvDir }, repoRoot,
                 line => progress.Report(new SetupProgress("venv", line)), ct).ConfigureAwait(false);
-            if (code != 0) throw new InvalidOperationException($"python -m venv failed with exit code {code}");
+            if (code != 0)
+            {
+                // Debian/Ubuntu strip the venv module out of the system Python; the managed
+                // download always includes it, so the hint only matters for system interpreters.
+                var hint = IsWindows ? "" :
+                    " (on Ubuntu/Debian the system Python needs: sudo apt install python3.12-venv  " +
+                    "or pick \"Set up automatically\" instead)";
+                throw new InvalidOperationException($"python -m venv failed with exit code {code}{hint}");
+            }
         }
 
         return await EnsureVenvDepsAsync(venvPython, repoRoot, progress, ct).ConfigureAwait(false);
@@ -335,24 +536,39 @@ public sealed class PythonEnvironmentService
         progress.Report(new SetupProgress("pip", "installing the obot package (pip install -e .)…"));
         var code = await RunProcessAsync(venvPython, new[] { "-m", "pip", "install", "-e", "." }, repoRoot,
             line => progress.Report(new SetupProgress("pip", line)), ct).ConfigureAwait(false);
-        if (code != 0) return Failed(venvPython, "pip install -e . failed — see the log");
+        if (code != 0) return Failed(venvPython, "pip install -e . failed  see the log");
 
-        var reqPath = Path.Combine(repoRoot, "requirements", "windows.txt");
-        progress.Report(new SetupProgress("pip", "installing dependencies (requirements/windows.txt)…"));
+        var reqFile = RequirementsFileName;
+        var reqPath = Path.Combine(repoRoot, "requirements", reqFile);
+        progress.Report(new SetupProgress("pip", $"installing dependencies (requirements/{reqFile})…"));
         code = await RunProcessAsync(venvPython, new[] { "-m", "pip", "install", "-r", reqPath }, repoRoot,
             line => progress.Report(new SetupProgress("pip", line)), ct).ConfigureAwait(false);
-        if (code != 0) return Failed(venvPython, "pip install -r requirements/windows.txt failed — see the log");
+        if (code != 0) return Failed(venvPython, $"pip install -r requirements/{reqFile} failed  see the log");
 
         progress.Report(new SetupProgress("verify", "verifying installation…"));
         var (verifyCode, _) = await RunCaptureAsync(venvPython, new[] { "-c", "import obot" }, repoRoot, ct).ConfigureAwait(false);
         if (verifyCode != 0) return Failed(venvPython, "verification failed: 'import obot' did not succeed");
 
+        if (!IsWindows)
+        {
+            // sounddevice's Linux wheel needs the system PortAudio library; without it the
+            // engine still runs (it simulates speech timing) but mic and speaker are dead.
+            // Surface that now, as a note rather than a failure.
+            var (sdCode, _) = await RunCaptureAsync(venvPython, new[] { "-c", "import sounddevice" }, repoRoot, ct).ConfigureAwait(false);
+            if (sdCode != 0)
+            {
+                progress.Report(new SetupProgress("verify",
+                    "note: PortAudio is missing, so mic/speaker won't work yet  " +
+                    "run: sudo apt install libportaudio2 espeak-ng"));
+            }
+        }
+
         var version = await ProbeVersionAsync(venvPython, ct).ConfigureAwait(false) ?? "unknown";
-        progress.Report(new SetupProgress("done", $"ready — Python {version}", 100));
+        progress.Report(new SetupProgress("done", $"ready  Python {version}", 100));
         return new PythonEnvironmentStatus
         {
             IsReady = true,
-            Message = $"Ready — Python {version}",
+            Message = $"Ready  Python {version}",
             Active = new PythonCandidate
             {
                 Kind = PythonCandidateKind.ExistingVenv,
@@ -392,11 +608,11 @@ public sealed class PythonEnvironmentService
         return parts.Length >= 2 ? parts[1].Trim() : null;
     }
 
-    /// <summary>Given a venv's <c>Scripts\python.exe</c>, read the sibling pyvenv.cfg's version.</summary>
+    /// <summary>Given a venv's interpreter path, read the sibling pyvenv.cfg's version.</summary>
     private static string? ReadVenvVersion(string pythonExePath)
     {
-        var scriptsDir = Path.GetDirectoryName(pythonExePath);
-        var venvDir = scriptsDir is null ? null : Path.GetDirectoryName(scriptsDir);
+        var binDir = Path.GetDirectoryName(pythonExePath);
+        var venvDir = binDir is null ? null : Path.GetDirectoryName(binDir);
         var cfg = venvDir is null ? null : Path.Combine(venvDir, "pyvenv.cfg");
         return cfg is not null && File.Exists(cfg) ? ReadVenvVersionFromCfg(cfg) : null;
     }
@@ -418,6 +634,13 @@ public sealed class PythonEnvironmentService
         using var md5 = MD5.Create();
         using var stream = File.OpenRead(path);
         var hash = md5.ComputeHash(stream);
+        return Convert.ToHexString(hash).Equals(expectedHex, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool VerifySha256(string path, string expectedHex)
+    {
+        using var stream = File.OpenRead(path);
+        var hash = SHA256.HashData(stream);
         return Convert.ToHexString(hash).Equals(expectedHex, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -457,7 +680,7 @@ public sealed class PythonEnvironmentService
         }
         catch (System.ComponentModel.Win32Exception)
         {
-            return (-1, ""); // exe not found on PATH — treated as "not available", not an error
+            return (-1, ""); // exe not found on PATH  treated as "not available", not an error
         }
     }
 

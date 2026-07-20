@@ -57,7 +57,7 @@ public partial class SetupViewModel : ObservableObject
     [ObservableProperty] private bool _connected;
 
     // Credentials & device fields (mirrors of config sections).
-    [ObservableProperty] private string _ohbotPort = "COM7";
+    [ObservableProperty] private string _ohbotPort = OperatingSystem.IsWindows() ? "COM7" : "/dev/ttyACM0";
     [ObservableProperty] private string _geminiApiKey = "";
     [ObservableProperty] private string _sshHost = "";
     [ObservableProperty] private int _sshPort = 22;
@@ -124,7 +124,7 @@ public partial class SetupViewModel : ObservableObject
     partial void OnSelectedMicChanged(MicDevice? value)
     {
         // A microphone is a device setting: persist it immediately (like the console app's
-        // picker) so the very next session actually uses it — no separate Save step needed.
+        // picker) so the very next session actually uses it  no separate Save step needed.
         if (_loading || value is null || !Connected) return;
         _ = SaveAsync();
     }
@@ -197,7 +197,7 @@ public partial class SetupViewModel : ObservableObject
         {
             var result = await _api.TestMicAsync(SelectedMic.Index);
             Status = result.Ok ? $"mic OK (peak {result.Peak:0})"
-                               : $"very low signal (peak {result.Peak:0}) — check the mic";
+                               : $"very low signal (peak {result.Peak:0})  check the mic";
         }
         catch (Exception ex)
         {
@@ -211,7 +211,7 @@ public partial class SetupViewModel : ObservableObject
     private bool CanSetupVosk() => !VoskSetupBusy;
 
     /// <summary>Downloads the selected Vosk model into ohbotData/vosk/ and points
-    /// audio.vosk_model_path/stt_engine at it — no manual download/unzip/config-edit needed.
+    /// audio.vosk_model_path/stt_engine at it  no manual download/unzip/config-edit needed.
     /// Saves immediately if connected (like the mic picker); otherwise just sets the fields
     /// so a later Save applies them.</summary>
     [RelayCommand(CanExecute = nameof(CanSetupVosk))]
@@ -246,7 +246,7 @@ public partial class SetupViewModel : ObservableObject
             }
             else
             {
-                VoskSetupStatus = $"{option.DisplayName} ready — connect and Save to apply";
+                VoskSetupStatus = $"{option.DisplayName} ready  connect and Save to apply";
             }
         }
         catch (OperationCanceledException)
