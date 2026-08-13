@@ -3,7 +3,6 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using ObotControl.Core.ViewModels;
-using ObotControl.App.Views;
 
 namespace ObotControl.App;
 
