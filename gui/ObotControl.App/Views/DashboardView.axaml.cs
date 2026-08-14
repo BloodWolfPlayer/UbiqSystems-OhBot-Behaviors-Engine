@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using ObotControl.Core.ViewModels;
@@ -34,5 +35,16 @@ public partial class DashboardView : UserControl
         Dispatcher.UIThread.Post(
             () => this.FindControl<ScrollViewer>("TranscriptScroll")?.ScrollToEnd(),
             DispatcherPriority.Loaded);
+    }
+
+    // Enter sends the turn, so a typed conversation never needs the mouse.
+    // Shift+Enter is left alone for anyone who wants a literal newline.
+    private void OnMessageKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Return || e.KeyModifiers.HasFlag(KeyModifiers.Shift)) return;
+        if (_viewModel is null || !_viewModel.SendCommand.CanExecute(null)) return;
+
+        _viewModel.SendCommand.Execute(null);
+        e.Handled = true;
     }
 }

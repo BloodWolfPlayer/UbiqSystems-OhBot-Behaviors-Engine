@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ObotControl.Core.Models;
@@ -83,8 +84,18 @@ public partial class DashboardViewModel : ObservableObject
 
     public bool HasPendingUser => !string.IsNullOrEmpty(PendingUserText);
 
+    /// <summary>A session start is in flight. Drives the progress panel on the dashboard:
+    /// starting a session takes ~15 s (backend handshake, TTS model warm-up, mic ambient
+    /// calibration), which looks like a hang without visible feedback.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanStart))]
+    private bool _isStarting;
+
+    /// <summary>Seconds since the current start began, so the wait shows visible movement.</summary>
+    [ObservableProperty] private double _startElapsedSeconds;
+
     public bool RequiresModel => SelectedBackend is "gemini" or "ollama";
-    public bool CanStart => Connected && !SessionActive;
+    public bool CanStart => Connected && !SessionActive && !IsStarting;
     public bool CanConverse => Connected && SessionActive;
 
     // -- session control ---------------------------------------------------------------
@@ -123,6 +134,12 @@ public partial class DashboardViewModel : ObservableObject
     [RelayCommand]
     private async Task StartSessionAsync()
     {
+        if (IsStarting) return;
+
+        IsStarting = true;
+        StartElapsedSeconds = 0;
+        using var done = new CancellationTokenSource();
+        var ticker = TrackStartElapsedAsync(done.Token);
         try
         {
             var state = await _api.StartSessionAsync(
@@ -137,6 +154,31 @@ public partial class DashboardViewModel : ObservableObject
         catch (Exception ex)
         {
             _logs.Append("error", $"session_start failed: {ex.Message}");
+        }
+        finally
+        {
+            done.Cancel();
+            await ticker;
+            IsStarting = false;
+        }
+    }
+
+    /// <summary>Ticks the elapsed counter while a start is in flight. An indeterminate bar
+    /// alone still reads as "stuck" over a 15 s wait; a moving number does not.</summary>
+    private async Task TrackStartElapsedAsync(CancellationToken ct)
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(250, ct);
+                StartElapsedSeconds = sw.Elapsed.TotalSeconds;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected: the start finished.
         }
     }
 

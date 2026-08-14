@@ -11,13 +11,16 @@ codebase runs natively on **Windows, Linux and the Raspberry Pi**.
 | Project | What |
 |---|---|
 | `ObotControl.Core` | UI-framework-free brain: protocol client (`EngineClient`), typed API (`EngineApi`), config/event DTOs, engine-process launcher, shared help text, and all MVVM view-models (CommunityToolkit.Mvvm). |
-| `ObotControl.App` | The Avalonia desktop app, thin XAML views over Core. |
+| `ObotControl.App` | The Avalonia desktop app, thin XAML views over Core. `Styles/Tokens.axaml` holds every colour, font size and radius; `Styles/Controls.axaml` turns those into reusable classes (`card`, `inset`, `pill`, `section`, `hint`, `label`, `value`, and the `primary`/`ghost`/`danger`/`icon` button variants). Views reference tokens by name and never hardcode a hex value, so the app can be re-themed from one file. |
 | `ObotControl.Core.Tests` | xunit: protocol/config round-trips + a live end-to-end test that drives the real engine. |
 
 ## Pages
 
 - **Dashboard**: pick backend/model/controller, Start, type or talk, big **Interrupt**
-  button, mic-mode toggle, live state indicator and active-TTS badge.
+  button, mic-mode toggle, live state indicator and active-TTS badge. The conversation is
+  rendered as chat bubbles (user right, bot left, `[Action]`/`(Emotion)` markers as inline
+  chips, interrupted sentences struck through). **Enter** sends a typed turn; Shift+Enter
+  inserts a newline.
 - **Setup**: step 0 provisions the Python environment itself (see below), then API key,
   serial port, remote-Ollama SSH, microphone (with a live level test), STT engine, and TTS
   voices with per-engine **Test** buttons. Save/Reload.
@@ -35,6 +38,13 @@ with a pseudo-3D look  the head yaws and nods with parallax and shading, the eye
 glossy spheres under sliding lids, the mouth is two brushed-metal lip plates  all driven
 live from the engine's joint stream, so it moves exactly as the servos would.
 A **? Help** button (and hover tooltips on every control) explains what everything does.
+Tooltips wait 900 ms before appearing and are dismissed as soon as the pointer drifts
+more than ~28 px from where it opened, so they help when you rest on a control without
+chasing you across the window (`Views/ToolTipBehavior.cs`).
+
+Starting a session takes roughly 15 seconds (backend handshake, TTS model warm-up,
+microphone ambient calibration), so **Start** shows a progress panel with an elapsed
+counter and what is happening, rather than just greying itself out.
 
 ## Prerequisites
 
@@ -56,7 +66,7 @@ A **? Help** button (and hover tooltips on every control) explains what everythi
 
 ```bash
 cd gui
-dotnet test ObotControl.Core.Tests/ObotControl.Core.Tests.csproj   # 27 tests, incl. a live engine round-trip
+dotnet test ObotControl.Core.Tests/ObotControl.Core.Tests.csproj   # 29 tests, incl. a live engine round-trip
 dotnet run  --project ObotControl.App/ObotControl.App.csproj        # launch the GUI
 # whole solution: dotnet build ObotControl.slnx
 ```

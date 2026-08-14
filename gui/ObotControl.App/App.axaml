@@ -2,29 +2,20 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="ObotControl.App.App"
              RequestedThemeVariant="Dark">
+
+  <!-- All colours, sizes and control styling live in Styles/. Views reference them by name
+       and never hardcode a hex value, so the app can be re-themed from one file. -->
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://ObotControl.App/Styles/Tokens.axaml"/>
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
   <Application.Styles>
     <FluentTheme />
-
-    <!-- App-wide polish: rounder controls, comfortable padding, a consistent accent. -->
-    <Style Selector="Button">
-      <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="Padding" Value="12,6" />
-    </Style>
-    <Style Selector="TextBox">
-      <Setter Property="CornerRadius" Value="6" />
-    </Style>
-    <Style Selector="ComboBox">
-      <Setter Property="CornerRadius" Value="6" />
-    </Style>
-    <Style Selector="TabItem">
-      <Setter Property="FontSize" Value="15" />
-    </Style>
+    <StyleInclude Source="avares://ObotControl.App/Styles/Controls.axaml"/>
   </Application.Styles>
 
-  <Application.Resources>
-    <Color x:Key="SystemAccentColor">#3B82F6</Color>
-    <Color x:Key="SystemAccentColorDark1">#2F6FD6</Color>
-    <Color x:Key="SystemAccentColorDark2">#2760BC</Color>
-    <Color x:Key="SystemAccentColorDark3">#1F4E9E</Color>
-  </Application.Resources>
 </Application>
