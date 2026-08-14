@@ -1,6 +1,6 @@
 # UbiqSystems-OhBot-Behaviors-Engine
 
-The behaviour engine for our OhBot robot ("Ms. Mimic"). It streams LLM responses, parses inline action/emotion markers, and drives speech and servo motion in real time — with a [desktop GUI](#desktop-gui) for setup, configuration and live conversations, and an ML gesture model that predicts natural head/eye motion from audio.
+The behaviour engine for our OhBot robot ("Ms. Mimic"). It streams LLM responses, parses inline action/emotion markers, and drives speech and servo motion in real time with a [desktop GUI](#desktop-gui) for setup, configuration and live conversations, and an ML gesture model that predicts natural head/eye motion from audio.
 
 ## Design
 
@@ -11,7 +11,7 @@ The system splits into seven layers:
 3. **Action registry**: maps action names to dedicated robot motion functions.
 4. **Speech engine** (`obot.speech`): synthesizes each sentence, plays it back interruptibly, animates lips from real audio, and fires markers at the exact word they were written on.
 5. **ML gesture model** (`obot.ml`): a BEAT2-trained Conv1d + GRU network that predicts servo positions from live audio features, driving natural head tilt, eye gaze and lid movement in real time.
-6. **Behavior modules** (`obot.robot.behaviors`): ambient life — blinking, nodding along while you talk, subtle sway while speaking, idle eye wandering.
+6. **Behavior modules** (`obot.robot.behaviors`): ambient life blinking, nodding along while you talk, subtle sway while speaking, idle eye wandering.
 7. **Obot controller**: owns the motor mixer and hardware-facing commands. Four implementations: `HardwareObotController` (real servos), `SimulatedObotController` (digital OhBot window), `VirtualObotController` (headless, joints streamed to GUI), and `ConsoleObotController` (prints what the robot would do).
 
 ## Data Flow

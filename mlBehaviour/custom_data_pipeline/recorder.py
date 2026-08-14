@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-recorder.py — Raw training data capture tool.
+recorder.py Raw training data capture tool.
 
 Displays sentences one at a time. Press SPACE to start recording (webcam + mic),
 press SPACE again to stop. Saves raw video + audio + sentence text.
@@ -9,9 +9,9 @@ Alignment and feature extraction are done separately (see align.py / extract.py)
 so the raw data can be reprocessed without re-recording.
 
 Saves per clip:
-    recordings/<clip_id>/video.avi    — webcam video (MJPG)
-    recordings/<clip_id>/audio.wav    — 16kHz mono audio
-    recordings/<clip_id>/meta.json    — sentence text, duration, fps
+    recordings/<clip_id>/video.avi    webcam video (MJPG)
+    recordings/<clip_id>/audio.wav    16kHz mono audio
+    recordings/<clip_id>/meta.json    sentence text, duration, fps
 
 Usage:
     python recorder.py [--sentences sentences.txt] [--out-dir ./recordings]

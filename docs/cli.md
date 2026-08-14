@@ -11,7 +11,7 @@ python -m obot [--text "..."] [--chunk-size N] [--console] [--sim] [--no-gesture
 | Flag | Default | What it does |
 |---|---|---|
 | `--text "..."` | - | Skip the interactive backend picker and voice session entirely: run the scripted demo once with this exact text, then exit. No API key, config.json, or microphone needed. |
-| `--chunk-size N` | `24` | Characters per chunk fed to the `StreamProcessor` by the scripted LLM source (only relevant with `--text`) — smaller values exercise streaming/token-boundary edge cases harder. |
+| `--chunk-size N` | `24` | Characters per chunk fed to the `StreamProcessor` by the scripted LLM source (only relevant with `--text`) smaller values exercise streaming/token-boundary edge cases harder. |
 | `--console` | off | Force `ConsoleObotController`: prints what the robot *would* do, needs no `ohbot` library, servos, or audio device. |
 | `--sim` | off | Use the digital OhBot (simulator window) instead of real hardware. See [Running without the robot](#running-without-the-robot). |
 | `--no-gesture-model` | off | Force the AI gesture model off for this run, overriding `config.json`'s `speech.gesture.enabled`. The scripted RMS-envelope mouth/motion track is used instead. |
@@ -27,7 +27,7 @@ python -m obot.sim [--text "..."] [--no-tuning]
 
 | Flag | Default | What it does |
 |---|---|---|
-| `--text "..."` | — | Speak this once at startup (tags like `[Nod]`/`(Happy)`/`!Delay500` work), then drop into the interactive prompt. |
+| `--text "..."` | | Speak this once at startup (tags like `[Nod]`/`(Happy)`/`!Delay500` work), then drop into the interactive prompt. |
 | `--no-tuning` | off | Hide the mouth-tuning sliders and "Save to config.json" button in the simulator window. |
 
 No LLM backend involved, type sentences directly at the prompt.
@@ -42,8 +42,8 @@ python -m obot.ml <checkpoint> <wav> [--control-hz HZ] [--device cpu|cuda] [--in
 
 | Flag | Default | What it does |
 |---|---|---|
-| `checkpoint` (positional) | — | Path to a `train.py` checkpoint, e.g. `mlBehaviour/runs/my_experiment/best_model.pt`. |
-| `wav` (positional) | — | Audio file to play and gesture along to. |
+| `checkpoint` (positional) | | Path to a `train.py` checkpoint, e.g. `mlBehaviour/runs/my_experiment/best_model.pt`. |
+| `wav` (positional) | | Audio file to play and gesture along to. |
 | `--control-hz` | `20.0` | Must match the `--control-hz` the checkpoint was trained with (`beat2_to_ohbot.py`). |
 | `--device` | `cpu` | torch device for inference: `cpu` or `cuda`. |
 | `--intensity` | `1.0` | Scales predicted movement around rest position: `>1` exaggerates the gestures, `<1` dampens them. |

@@ -71,7 +71,7 @@
                              FontWeight="SemiBold" Foreground="{StaticResource Success}"/>
                 </Border>
               </StackPanel>
-              <TextBlock Text="Drag these while the robot is talking — changes take effect immediately, no restart."
+              <TextBlock Text="Drag these while the robot is talking changes take effect immediately, no restart."
                          Classes="hint" TextWrapping="Wrap"/>
             </StackPanel>
 
@@ -143,7 +143,7 @@
 
               <StackPanel Grid.Row="9" Grid.Column="0">
                 <TextBlock Text="Audio sync offset" Classes="label"/>
-                <TextBlock Text="sync_offset_s — negative = mouth leads" Classes="caption"/>
+                <TextBlock Text="sync_offset_s negative = mouth leads" Classes="caption"/>
               </StackPanel>
               <Slider Grid.Row="9" Grid.Column="1" Minimum="-0.3" Maximum="0.3" Value="{Binding SyncOffset}"/>
               <TextBlock Grid.Row="9" Grid.Column="2" Text="{Binding SyncOffset, StringFormat='0.00'}" Classes="value"/>
@@ -162,7 +162,7 @@
             <Grid ColumnDefinitions="190,*,64" RowDefinitions="Auto,Auto,Auto,Auto">
               <StackPanel Grid.Row="0" Grid.Column="0">
                 <TextBlock Text="Mixer tick" Classes="label"/>
-                <TextBlock Text="tick_s — seconds per update" Classes="caption"/>
+                <TextBlock Text="tick_s seconds per update" Classes="caption"/>
               </StackPanel>
               <Slider Grid.Row="0" Grid.Column="1" Minimum="0.02" Maximum="0.2" Value="{Binding TickS}"/>
               <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding TickS, StringFormat='0.00'}" Classes="value"/>

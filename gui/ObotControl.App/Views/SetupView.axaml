@@ -103,7 +103,7 @@
               </Border>
               <StackPanel Grid.Column="1" Spacing="2">
                 <TextBlock Text="Microphone &amp; speech-to-text" Classes="section"/>
-                <TextBlock Text="Pick your mic and press Test — the bar should move when you speak."
+                <TextBlock Text="Pick your mic and press Test the bar should move when you speak."
                            Classes="hint" TextWrapping="Wrap"/>
               </StackPanel>
             </Grid>
@@ -189,7 +189,7 @@
 
             <Grid ColumnDefinitions="110,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
               <TextBlock Grid.Row="0" Grid.Column="0" Text="Edge ★" Classes="label"
-                         ToolTip.Tip="Microsoft Edge neural voices — free, online, best quality."/>
+                         ToolTip.Tip="Microsoft Edge neural voices free, online, best quality."/>
               <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding EdgeVoices}" SelectedItem="{Binding EdgeVoice}"
                         HorizontalAlignment="Stretch" Margin="0,0,8,6"/>
               <Button Grid.Row="0" Grid.Column="2" Content="Test" Classes="ghost" Margin="0,0,0,6"
@@ -197,7 +197,7 @@
                       ToolTip.Tip="{x:Static core:HelpText.TestVoice}"/>
 
               <TextBlock Grid.Row="1" Grid.Column="0" Text="Kokoro ★" Classes="label"
-                         ToolTip.Tip="Kokoro — offline neural voice, best local quality."/>
+                         ToolTip.Tip="Kokoro offline neural voice, best local quality."/>
               <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding KokoroVoices}" SelectedItem="{Binding KokoroVoice}"
                         HorizontalAlignment="Stretch" Margin="0,0,8,6"/>
               <Button Grid.Row="1" Grid.Column="2" Content="Test" Classes="ghost" Margin="0,0,0,6"
@@ -205,7 +205,7 @@
                       ToolTip.Tip="{x:Static core:HelpText.TestVoice}"/>
 
               <TextBlock Grid.Row="2" Grid.Column="0" Text="gTTS" Classes="label"
-                         ToolTip.Tip="Google Translate TTS — free, online. The value is the accent (TLD)."/>
+                         ToolTip.Tip="Google Translate TTS free, online. The value is the accent (TLD)."/>
               <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding GttsAccents}" SelectedItem="{Binding GttsAccent}"
                         HorizontalAlignment="Stretch" Margin="0,0,8,6"/>
               <Button Grid.Row="2" Grid.Column="2" Content="Test" Classes="ghost" Margin="0,0,0,6"

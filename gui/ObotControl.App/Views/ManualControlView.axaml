@@ -38,7 +38,7 @@
             <TextBlock Grid.Column="0" Text="⚠" Foreground="{StaticResource Warning}"
                        VerticalAlignment="Center" Margin="0,0,10,0"/>
             <TextBlock Grid.Column="1"
-                       Text="No active session. Start one on the Dashboard first — manual control drives the running engine's mixer."
+                       Text="No active session. Start one on the Dashboard first manual control drives the running engine's mixer."
                        Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" VerticalAlignment="Center"/>
           </Grid>
         </Border>
@@ -48,7 +48,7 @@
           <StackPanel Spacing="12">
             <StackPanel Spacing="2">
               <TextBlock Text="Emotions" Classes="section"/>
-              <TextBlock Text="Applies that emotion's default mouth/eyes/nod pose — the same path the LLM's (Emotion) markers use — until you pick another."
+              <TextBlock Text="Applies that emotion's default mouth/eyes/nod pose the same path the LLM's (Emotion) markers use until you pick another."
                          Classes="hint" TextWrapping="Wrap"/>
             </StackPanel>
             <ItemsControl ItemsSource="{Binding Emotions}">

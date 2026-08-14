@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-visualizer.py — Playback recorded clips with synchronized video, audio, and transcription.
+visualizer.py Playback recorded clips with synchronized video, audio, and transcription.
 
 Plays the video with the audio, showing word-level transcription highlighted
 in real-time as words are spoken.

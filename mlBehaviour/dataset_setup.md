@@ -27,8 +27,8 @@ Each recording pairs synchronized **speech audio** with **full-body 3D motion** 
 
 Each frame of body motion is stored as pose parameters for a shared, rigged human template rather than raw joint positions or a per-actor skeleton:
 
-- **SMPL-X body model** — captures body shape (betas), body pose, hand pose (fingers), and root translation as axis-angle rotations per joint. This is what lets the same parameter set drive any SMPL-X-compatible avatar without retargeting.
-- **FLAME head model** — captures facial expression and jaw pose as a low-dimensional expression/blendshape vector, refined from the original ARKit blendshapes via an optimization step.
+- **SMPL-X body model** captures body shape (betas), body pose, hand pose (fingers), and root translation as axis-angle rotations per joint. This is what lets the same parameter set drive any SMPL-X-compatible avatar without retargeting.
+- **FLAME head model** captures facial expression and jaw pose as a low-dimensional expression/blendshape vector, refined from the original ARKit blendshapes via an optimization step.
 - Refinements over a naive MoSh++ fit: corrected neck/head proportions, improved neck flexion, and higher-fidelity finger articulation.
 
 Because SMPL-X decouples shape from pose, sequences from different speakers (different body proportions) can be trained on jointly without per-subject retargeting.
