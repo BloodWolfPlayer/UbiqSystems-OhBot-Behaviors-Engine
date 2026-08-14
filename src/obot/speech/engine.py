@@ -192,15 +192,22 @@ class SpeechEngine:
                         fired.append(asyncio.create_task(on_marker(marker)))
                     next_marker += 1
 
-                # An AI-predicted pose for this clip takes over the whole face/head --
-                # driving both it and the envelope mouth track would just have them
-                # fight over the lips, so the envelope track only runs as a fallback.
                 if clip.pose is not None and pose_sink is not None:
                     frame = min(
                         clip.pose.motion.shape[0] - 1,
                         max(0, int(t * clip.pose.control_hz)),
                     )
-                    pose_sink(dict(zip(clip.pose.axis_names, clip.pose.motion[frame].tolist())))
+                    pose = dict(zip(clip.pose.axis_names, clip.pose.motion[frame].tolist()))
+                    if self.settings.gesture.scripted_mouth:
+                        pose.pop("TOPLIP", None)
+                        pose.pop("BOTTOMLIP", None)
+                    pose_sink(pose)
+                    if self.settings.gesture.scripted_mouth and mouth_sink is not None:
+                        openness = clip.mouth.openness_at(t + mouth_cfg.sync_offset_s)
+                        mouth_sink(
+                            min(openness * mouth_cfg.top_gain, mouth_cfg.top_max_delta),
+                            min(openness * mouth_cfg.bottom_gain, mouth_cfg.bottom_max_delta),
+                        )
                 elif mouth_sink is not None:
                     openness = clip.mouth.openness_at(t + mouth_cfg.sync_offset_s)
                     mouth_sink(

@@ -196,6 +196,9 @@ class AIGestureSettings:
     # Scales predicted movement around rest position: 1.0 = model output
     # unchanged, >1 exaggerates the gestures, <1 dampens them.
     intensity: float = 1.0
+    # When True, the ML model drives head/eyes/lids but TOPLIP and BOTTOMLIP
+    # are still driven by the scripted RMS-envelope mouth track.
+    scripted_mouth: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> "AIGestureSettings":

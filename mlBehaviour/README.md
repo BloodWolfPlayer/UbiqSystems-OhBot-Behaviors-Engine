@@ -1,122 +1,86 @@
 
-# Dataset setup
 
-## Usage
 
-### 1. Calibrate once on your dataset (percentile-based min/max per axis)
-```sh
-python beat2_to_ohbot.py calibrate --beat2-root ./BEAT2 --out-dir ./ohbot_data
-```
+# Training pipeline
 
-### 2. Convert every matched (motion, audio) pair
-```sh
-python beat2_to_ohbot.py convert --beat2-root ./BEAT2 --out-dir ./ohbot_data --control-hz 20
-```
+## Overview
 
-# Training pipeline: audio -> Ohbot servo motion
+This Pipeline is designed to train a small ml model to predict Ohbot servo positions from audio features. We use a converted subset of the BEAT2 dataset, which contains motion and audio data. The `beat2_to_ohbot.py` script is used to convert the BEAT2 dataset into a format suitable for the OhBot platform. For more information about the BEAT2 dataset, please refer to the [BEAT2 dataset documentation](dataset_setup.md).
 
-Files:
+This directory contains the following key files:
 - `features.py` -- log-mel spectrogram extraction, frame-aligned to your control_hz (pure numpy, tested)
 - `ohbot_dataset.py` -- PyTorch `Dataset` reading `manifest.csv`/`clips/*.npz` from `beat2_to_ohbot.py`
 - `model.py` -- small Conv1d + GRU model, outputs 8 servo values in [0, 10] (7 if converted with `--exclude-head-tilt`)
-- `train.py` -- training loop, with a **pipeline smoke test** built in
+- `train.py` -- training loop with **named runs**, **stop/resume**, and a pipeline smoke test
 
 ## Install
+
+The ML training pipeline requires Python 3.10+ and the following dependencies:
 
 ```bash
 pip install torch numpy
 ```
-(no torchaudio/librosa needed -- feature extraction is plain numpy)
 
-## Step 1: verify the pipeline, not the model
 
-This is the important step given what you said you want right now. Run:
+## Training runs
 
-```bash
-python train.py --data-dir ./ohbot_data --overfit-one-batch --epochs 200
-```
+Every training run has a **name** (`--name`, default `"default"`). The script
+creates a folder `runs/<name>/` containing:
 
-This grabs one batch of clips and trains repeatedly only on those, with no
-train/val split. If everything is wired correctly (data loads, features
-align with motion targets, shapes match, gradients flow), a model this
-small should be able to memorize one batch and drive `train_loss` down
-close to 0 within a couple hundred epochs -- that's the whole point of an
-overfit test: it isolates "is the plumbing correct?" from "does the model
-generalize?".
+| File | Purpose |
+|------|---------|
+| `config.json` | All hyperparameters. Frozen when the run is first created and used when resuming stopped training runs |
+| `checkpoint.pt` | Full training state (model + optimizer + epoch), saved every epoch |
+| `best_model.pt` | Best model checkpoint by validation loss |
+| `train.log` | Append-only training log |
 
-If the loss plateaus far above 0 (and above the printed baseline number),
-something upstream is broken -- most likely candidates, in order of
-likelihood:
-1. Feature/label misalignment (check `--n-mels`, hop length vs `control_hz`)
-2. A bug in `collate_fn` padding/masking
-3. Data itself has near-zero signal (e.g. all-constant motion channels --
-   this can legitimately happen for axes like `EYETILT` if your BEAT2
-   subset barely moves the eyes vertically)
-
-## Step 2: a real (still fast) training run
+### Starting a new run
 
 ```bash
-python train.py --data-dir ./ohbot_data --epochs 30 --batch-size 4
+python train.py --name my_experiment --data-dir ./ohbot_data --epochs 100 --lr 0.001
 ```
 
-This does a real train/val split (`--val-frac`, default 0.15), trains the
-same small model, and saves the best checkpoint (by val loss) to
-`./training_run/best_model.pt`. Watch that `val_loss` actually drops below
-the printed baseline ("always predict rest position") -- if it doesn't,
-the model isn't learning anything useful yet.
+### Stopping
 
-Useful flags for quick iteration:
-- `--limit 20` -- only use the first 20 clips (fast iteration on pipeline changes)
-- `--n-mels`, `--conv-channels`, `--gru-hidden` -- model size knobs, all small by default
-- `--device cpu` / `--device cuda` -- override auto-detection
+Press **Ctrl-C** at any time. The current epoch is cut short, the checkpoint is
+saved, and the script prints the command to resume.
 
-## Step 3: run a checkpoint live on the Ohbot
-
-Inference and servo driving live in the main app (`src/obot/ml/`), not here --
-`mlBehaviour/` stays training-only. It loads this directory's `model.py` /
-`features.py` directly (via importlib, not a copy) so it can never drift from
-whatever a checkpoint was actually trained with.
+### Resuming a run
 
 ```bash
-pip install -r requirements/ml.txt   # adds torch/scipy/soundfile on top of the base app
-python -m obot.ml mlBehaviour/training_run/best_model.pt path/to/clip.wav --sim
-python -m obot.ml mlBehaviour/training_run/best_model.pt path/to/clip.wav          # real hardware
+python train.py --name my_experiment --resume
 ```
 
-This predicts a pose per control-rate frame, plays the wav, and drives the
-robot's servos directly frame-by-frame via `ObotController.drive_pose()` /
-`release_pose()` (in `src/obot/robot/controller.py`) -- new endpoints that
-bypass the offset/lip mixer and set an absolute joint target instead, still
-slew-limited by the same motor mixer thread everything else uses.
+This loads `config.json` from the run folder and picks up training from the
+last completed epoch. All hyperparameters come from the saved config. CLI
+args other than `--name` and `--device` are ignored on resume.
 
-## Step 4: sanity-check a converted clip in the GUI visualizer
-
-Before trusting the extraction (or feeding it to `train.py`), you can watch a
-converted clip play back in the dotnet GUI's visualizer -- the same view used
-for live conversations, driven here from ground-truth training data instead.
+### Running multiple experiments side by side
 
 ```bash
-python -m obot --serve                                          # terminal 1
-# launch the GUI (gui/), connect, and press Start on the Dashboard (any backend)
-
-python -m obot.ml.replay_dataset --list                          # browse clip_ids
-python -m obot.ml.replay_dataset --clip 10_kieks_0_103_103        # terminal 2
+python train.py --name fast_lr   --data-dir ./ohbot_data --lr 0.003 --epochs 50
+python train.py --name slow_lr   --data-dir ./ohbot_data --lr 0.0003 --epochs 200
+python train.py --name big_model --data-dir ./ohbot_data --gru-hidden 128 --conv-channels 64
 ```
 
-This streams `set_joint` calls over the same WebSocket protocol the GUI uses,
-frame-by-frame at the clip's `control_hz`, so you can see head/eye/lip motion
-exactly as `beat2_to_ohbot.py` extracted and calibrated it -- useful for
-catching axis/sign mistakes (see the module docstring's "Known limitations")
-before they get baked into a training run. It also plays the clip's matched
-audio locally by default (`--no-audio` to skip), so you can correlate motion
-against what the speaker was actually saying.
+Each gets its own folder under `runs/` with independent configs and checkpoints.
+You can stop any of them and resume later without affecting the others.
 
-## What's NOT covered yet (next steps)
+### All training flags
 
-- Scaling up model size/data once the small model verifies the pipeline.
-- Proper train/val/test splits by *speaker* (not just by clip) if you want
-  to test generalization to a held-out voice, since BEAT2 clips from the
-  same speaker will otherwise leak into both splits.
-- Wiring AI-predicted gesture into the live chat pipeline itself (right now
-  `python -m obot.ml` runs standalone against a wav file, independent of
-  `RobotPipeline`/TTS).
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--name` | string | `"default"` | Name for this training run. Creates `runs/<name>/` folder |
+| `--resume` | flag | off | Resume a previously stopped run. Uses the saved `config.json`, ignoring other CLI args (except `--name` and `--device`) |
+| `--data-dir` | path | `"./ohbot_data"` | Directory containing the converted BEAT2 dataset (`manifest.csv` and `clips/`) |
+| `--n-mels` | int | `40` | Number of mel-frequency bins for the log-mel spectrogram input features |
+| `--conv-channels` | int | `32` | Number of output channels in the Conv1d layers |
+| `--gru-hidden` | int | `64` | Hidden size of the GRU recurrent layer |
+| `--epochs` | int | `30` | Total number of training epochs |
+| `--batch-size` | int | `4` | Number of clips per training batch |
+| `--lr` | float | `1e-3` | Learning rate for the optimizer |
+| `--val-frac` | float | `0.15` | Fraction of clips held out for validation |
+| `--seed` | int | `0` | Random seed for reproducibility (data splits, weight init) |
+| `--limit` | int | None | Only use the first N clips (useful for quick pipeline tests) |
+| `--overfit-one-batch` | flag | off | Pipeline smoke test: train on a single batch repeatedly with no val split |
+| `--device` | string | `"cuda"` if available, else `"cpu"` | PyTorch device to train on (e.g. `cpu`, `cuda`, `cuda:1`) |

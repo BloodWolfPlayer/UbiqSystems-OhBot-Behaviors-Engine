@@ -78,6 +78,7 @@ import argparse
 import json
 import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -241,10 +242,30 @@ def estimate_blink_placeholder(n_frames, value=8.0):
 # Calibration: per-axis percentile-based min/max across the whole dataset
 # ==============================================================================
 
-def calibrate(pairs, top_lip_ratio, sample_every=1, pct=(1.0, 99.0)):
-    """First pass over the dataset: collect raw channel values so we can map
-    them to Ohbot's 0-10 range using robust (percentile-based) min/max instead
-    of a handful of outlier frames blowing up the whole scale."""
+MOUTH_AXES = {"TOPLIP", "BOTTOMLIP"}
+
+
+def calibrate(pairs, top_lip_ratio, sample_every=1, pct=99.0):
+    """First pass over the dataset: collect raw channel values and turn them
+    into a calibration that puts REST (not the dataset's raw min/max) at
+    Ohbot's center.
+
+    Plain min/max normalization (old behavior) maps [lo, hi] -> [0, 10]
+    linearly. That only puts "head level / eyes forward" (0 degrees) at
+    Ohbot's center (5) if 0 degrees happens to sit exactly at the midpoint
+    of [lo, hi] -- which it usually does NOT, because BEAT2's raw angle
+    distributions are skewed (speakers don't glance left/right or up/down
+    equally, rig/camera setup isn't perfectly centered, etc). That skew is
+    what was causing the "always looking top-left" bug: it isn't just an
+    offset, the *scale* on each side of center is uneven too, so a flat
+    additive correction can't fix it.
+
+    Fix: for head/eye axes, anchor the dataset's own median to Ohbot 5 and
+    scale deviations symmetrically around it (--> "baseline"/"half_range").
+    For mouth axes, 0 degrees IS a meaningful physical rest state (mouth
+    closed), so we pin lo=0 explicitly instead of taking it from a
+    percentile.
+    """
     collected = {ax: [] for ax in OHBOT_AXES if ax != "LIDBLINK"}
 
     for i, (npz_path, _wav_path) in enumerate(pairs):
@@ -264,24 +285,50 @@ def calibrate(pairs, top_lip_ratio, sample_every=1, pct=(1.0, 99.0)):
         if not chunks:
             continue
         all_vals = np.concatenate(chunks)
-        lo, hi = np.percentile(all_vals, pct)
-        if hi - lo < 1e-6:  # degenerate axis (e.g. no motion at all)
-            hi = lo + 1e-6
-        calibration[ax] = {"lo": float(lo), "hi": float(hi)}
-        print(f"[calibrate] {ax:10s} raw range (p{pct[0]:.0f}-p{pct[1]:.0f}): "
-              f"[{lo:.2f}, {hi:.2f}] degrees")
+
+        if ax in MOUTH_AXES:
+            hi = float(np.percentile(all_vals, pct))
+            if hi < 1e-6:
+                hi = 1e-6
+            calibration[ax] = {"mode": "mouth", "lo": 0.0, "hi": hi}
+            print(f"[calibrate] {ax:10s} mouth range: [0.00, {hi:.2f}] degrees "
+                  f"(closed -> open)")
+        else:
+            baseline = float(np.median(all_vals))
+            centered = all_vals - baseline
+            half_range = float(np.percentile(np.abs(centered), pct))
+            degenerate = half_range < 1e-6
+            if degenerate:
+                half_range = 1e-6
+            calibration[ax] = {"mode": "symmetric", "baseline": baseline, "half_range": half_range}
+            print(f"[calibrate] {ax:10s} baseline={baseline:+.2f} deg "
+                  f"(-> Ohbot 5), symmetric half-range=+/-{half_range:.2f} deg"
+                  + ("  *** WARNING: near-zero spread -- this axis has almost "
+                     "no signal in the raw data; small noise will get amplified "
+                     "to the full 0-10 range. Likely candidates: EYETURN/EYETILT, "
+                     "since BEAT2's mocap has no real eye-tracking. Consider "
+                     "synthesizing this axis instead of driving it from the "
+                     "dataset." if degenerate else ""))
 
     return calibration
 
 
-def normalize_to_ohbot(raw_value, lo, hi, invert=False):
-    """Linearly map raw_value from [lo, hi] -> Ohbot's [0, 10], clipping
-    outliers. If invert=True, flips which end is 0 vs 10 (use this if you
-    discover an axis moves the wrong direction during --debug-plot review)."""
-    x = np.clip((raw_value - lo) / (hi - lo), 0.0, 1.0)
-    if invert:
-        x = 1.0 - x
-    return x * (OHBOT_MAX - OHBOT_MIN) + OHBOT_MIN
+def normalize_to_ohbot(raw_value, cal, invert=False):
+    """Map a raw angle (degrees) to Ohbot's [0, 10] range using the
+    calibration dict produced by calibrate(). 'symmetric' mode anchors the
+    dataset's own rest pose (median) to Ohbot's center (5) and scales
+    deviations symmetrically either side. 'mouth' mode pins 0 degrees
+    (closed) to Ohbot 0."""
+    if cal["mode"] == "symmetric":
+        x = np.clip((raw_value - cal["baseline"]) / cal["half_range"], -1.0, 1.0)
+        if invert:
+            x = -x
+        return x * 5.0 + 5.0
+    else:  # "mouth"
+        x = np.clip((raw_value - cal["lo"]) / (cal["hi"] - cal["lo"]), 0.0, 1.0)
+        if invert:
+            x = 1.0 - x
+        return x * (OHBOT_MAX - OHBOT_MIN) + OHBOT_MIN
 
 
 # ==============================================================================
@@ -373,7 +420,7 @@ def convert_one(npz_path, wav_path, calibration, cfg: ConvertConfig):
         if cal is None:
             raise ValueError(f"no calibration found for axis {ax}; run `calibrate` first")
         invert = ax in cfg.invert_axes
-        motion_out[:, j] = normalize_to_ohbot(resampled, cal["lo"], cal["hi"], invert=invert)
+        motion_out[:, j] = normalize_to_ohbot(resampled, cal, invert=invert)
 
     audio, sr = load_audio(wav_path, target_sr=cfg.audio_sr)
 
@@ -400,6 +447,33 @@ def run_calibrate(args):
     print(f"[calibrate] wrote {cal_path}")
 
 
+def _convert_and_save_one(npz_path, wav_path, calibration, cfg, out_motion_dir):
+    """Worker function for parallel convert: does the conversion AND the
+    file write (so worker processes don't need to ship the full motion/audio
+    arrays back to the main process -- only a small manifest row goes back
+    over the pool's IPC pipe, which matters once you're running dozens of
+    workers on a big dataset).
+
+    Must stay a plain module-level function (not a closure/lambda/method) so
+    ProcessPoolExecutor can pickle it and send it to worker processes.
+
+    Returns (clip_id, manifest_row_str_or_None, error_str_or_None).
+    """
+    clip_id = os.path.splitext(os.path.basename(npz_path))[0]
+    try:
+        result = convert_one(npz_path, wav_path, calibration, cfg)
+    except Exception as e:
+        return clip_id, None, str(e)
+
+    out_path = os.path.join(out_motion_dir, f"{clip_id}.npz")
+    np.savez_compressed(out_path, **result)
+    n_frames = result["ohbot_motion"].shape[0]
+    duration_s = len(result["audio"]) / float(result["audio_sr"])
+    row = (f"{clip_id},{out_path},{result['source_motion_file']},"
+           f"{result['source_audio_file']},{n_frames},{duration_s:.3f}\n")
+    return clip_id, row, None
+
+
 def run_convert(args):
     cal_path = args.calibration_file or os.path.join(args.out_dir, "calibration.json")
     if not os.path.exists(cal_path):
@@ -424,27 +498,49 @@ def run_convert(args):
     out_motion_dir = os.path.join(args.out_dir, "clips")
     os.makedirs(out_motion_dir, exist_ok=True)
 
+    n_workers = args.workers if args.workers else (os.cpu_count() or 1)
+    n_workers = max(1, min(n_workers, len(pairs))) if pairs else 1
+    print(f"[convert] using {n_workers} worker process(es) for {len(pairs)} pairs")
+
     manifest_path = os.path.join(args.out_dir, "manifest.csv")
     n_ok, n_fail = 0, 0
     with open(manifest_path, "w") as manifest:
         manifest.write("clip_id,out_path,source_motion_file,source_audio_file,n_frames,duration_s\n")
-        for npz_path, wav_path in pairs:
-            clip_id = os.path.splitext(os.path.basename(npz_path))[0]
-            try:
-                result = convert_one(npz_path, wav_path, calibration, cfg)
-            except Exception as e:
-                print(f"[convert] skipping {clip_id}: {e}")
-                n_fail += 1
-                continue
-            out_path = os.path.join(out_motion_dir, f"{clip_id}.npz")
-            np.savez_compressed(out_path, **result)
-            n_frames = result["ohbot_motion"].shape[0]
-            duration_s = len(result["audio"]) / float(result["audio_sr"])
-            manifest.write(f"{clip_id},{out_path},{result['source_motion_file']},"
-                            f"{result['source_audio_file']},{n_frames},{duration_s:.3f}\n")
-            n_ok += 1
-            if n_ok % 100 == 0:
-                print(f"[convert] {n_ok} clips done")
+
+        if n_workers == 1:
+            # Skip pool overhead entirely for the single-worker case.
+            for npz_path, wav_path in pairs:
+                clip_id, row, err = _convert_and_save_one(npz_path, wav_path, calibration, cfg, out_motion_dir)
+                if err is not None:
+                    print(f"[convert] skipping {clip_id}: {err}")
+                    n_fail += 1
+                    continue
+                manifest.write(row)
+                n_ok += 1
+                if n_ok % 100 == 0:
+                    print(f"[convert] {n_ok} clips done")
+        else:
+            with ProcessPoolExecutor(max_workers=n_workers) as pool:
+                futures = {
+                    pool.submit(_convert_and_save_one, npz_path, wav_path, calibration, cfg, out_motion_dir): npz_path
+                    for npz_path, wav_path in pairs
+                }
+                for future in as_completed(futures):
+                    try:
+                        clip_id, row, err = future.result()
+                    except Exception as e:
+                        # A worker process crashed outright (rather than convert_one
+                        # raising a normal caught exception) -- still report and continue.
+                        clip_id = os.path.splitext(os.path.basename(futures[future]))[0]
+                        row, err = None, str(e)
+                    if err is not None:
+                        print(f"[convert] skipping {clip_id}: {err}")
+                        n_fail += 1
+                        continue
+                    manifest.write(row)
+                    n_ok += 1
+                    if n_ok % 100 == 0:
+                        print(f"[convert] {n_ok} clips done")
 
     print(f"[convert] done. {n_ok} clips written, {n_fail} skipped. Manifest: {manifest_path}")
 
@@ -507,6 +603,10 @@ def build_parser():
     p_conv.add_argument("--invert-axis", action="append",
                          help="Axis name to invert (0<->10), e.g. --invert-axis HEADTURN. Repeatable.")
     p_conv.add_argument("--audio-sr", type=int, default=16000)
+    p_conv.add_argument("--workers", type=int, default=0,
+                         help="Number of parallel worker processes for conversion. "
+                              "Default (0) uses all available CPU cores (os.cpu_count()). "
+                              "Set to 1 to force single-threaded (e.g. for debugging).")
     p_conv.set_defaults(func=run_convert)
 
     p_dbg = sub.add_parser("debug-plot", parents=[common], help="Plot raw angle curves for one clip")

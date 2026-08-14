@@ -106,6 +106,12 @@ def build_parser() -> argparse.ArgumentParser:
              "config.json's speech.gesture.enabled (scripted mouth track is used instead).",
     )
     parser.add_argument(
+        "--scripted-mouth",
+        action="store_true",
+        help="Use the AI gesture model for head/eyes/lids but keep the scripted "
+             "RMS-envelope mouth track for TOPLIP/BOTTOMLIP.",
+    )
+    parser.add_argument(
         "--serve",
         action="store_true",
         help="Run the WebSocket control server for the GUI instead of the console app.",
@@ -140,12 +146,15 @@ async def _scripted_demo(
     console: bool = False,
     sim: bool = False,
     no_gesture_model: bool = False,
+    scripted_mouth: bool = False,
 ) -> None:
     from .audio.keyboard import KeyListener
 
     cfg = _try_load_config()
     if no_gesture_model and cfg is not None:
         cfg.speech.gesture.enabled = False
+    if scripted_mouth and cfg is not None:
+        cfg.speech.gesture.scripted_mouth = True
     llm_client = ScriptedLLMClient(text, chunk_size=chunk_size)
     controller = make_controller(force_console=console, sim=sim, cfg=cfg)
     pipeline = RobotPipeline(llm_client=llm_client, controller=controller)
@@ -461,6 +470,7 @@ async def main() -> None:
             port=args.port,
             default_controller=default_controller,
             no_gesture_model=args.no_gesture_model,
+            scripted_mouth=args.scripted_mouth,
         )
         return
 
@@ -471,6 +481,7 @@ async def main() -> None:
             console=args.console,
             sim=args.sim,
             no_gesture_model=args.no_gesture_model,
+            scripted_mouth=args.scripted_mouth,
         )
         return
 
@@ -484,6 +495,8 @@ async def main() -> None:
 
     if args.no_gesture_model:
         cfg.speech.gesture.enabled = False
+    if args.scripted_mouth:
+        cfg.speech.gesture.scripted_mouth = True
 
     choice = _prompt_mode()
     if choice == "1":
@@ -499,6 +512,7 @@ async def main() -> None:
                 console=args.console,
                 sim=args.sim,
                 no_gesture_model=args.no_gesture_model,
+                scripted_mouth=args.scripted_mouth,
             )
     else:
         try:
@@ -512,6 +526,7 @@ async def main() -> None:
             console=args.console,
             sim=args.sim,
             no_gesture_model=args.no_gesture_model,
+            scripted_mouth=args.scripted_mouth,
         )
 
 

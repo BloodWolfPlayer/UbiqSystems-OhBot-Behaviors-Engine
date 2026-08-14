@@ -231,5 +231,7 @@ gui/**/bin/
 gui/**/obj/
 gui/**/*.user
 
-# taining data
+# training data
 ohbot_data
+
+mlBehaviour/data_pipeline/recordings/*
