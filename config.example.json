@@ -72,11 +72,12 @@
       "sync_offset_s": 0.0
     },
     "gesture": {
-      "enabled": false,
-      "checkpoint_path": "",
+      "enabled": true,
+      "checkpoint_path": "src/obot/ml/models/halfSize_longRun.pt",
       "control_hz": 20.0,
       "device": "cpu",
-      "intensity": 1.0
+      "intensity": 3.0,
+      "scripted_mouth": false
     },
     "output_device_index": null,
     "word_stop_pad_s": 0.06,
