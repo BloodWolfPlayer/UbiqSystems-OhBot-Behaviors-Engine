@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ObotControl.Core.Services;
 
 namespace ObotControl.Core.ViewModels;
 
@@ -17,6 +18,7 @@ public partial class LogsViewModel : ObservableObject
 {
     private const int MaxLines = 2000;
     private readonly List<LogLine> _all = new();
+    private LogFileService? _logFile;
 
     public ObservableCollection<LogLine> Lines { get; } = new();
 
@@ -24,8 +26,16 @@ public partial class LogsViewModel : ObservableObject
     [ObservableProperty] private bool _showWarnings = true;
     [ObservableProperty] private bool _showErrors = true;
 
+    public string? LogDirectory => _logFile?.LogDirectory;
+
+    public void SetLogDirectory(string guiRoot)
+    {
+        _logFile ??= new LogFileService(guiRoot);
+    }
+
     public void Append(string level, string message)
     {
+        _logFile?.Write(level, message);
         var line = new LogLine(DateTimeOffset.Now, level, message);
         _all.Add(line);
         if (_all.Count > MaxLines) _all.RemoveRange(0, _all.Count - MaxLines);

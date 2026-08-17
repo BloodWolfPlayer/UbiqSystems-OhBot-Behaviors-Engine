@@ -42,8 +42,13 @@ def _import_ohbot(preferred_port: str | None = None) -> None:
     try:
         from ohbot import ohbot as _mod
         ohbot = _mod
-    except ImportError:
-        ohbot = None
+    except ImportError as exc:
+        if "ohbot" in str(exc).lower() or "No module named 'ohbot'" in str(exc):
+            ohbot = None
+        else:
+            raise ImportError(
+                f"the 'ohbot' package is installed but a dependency is missing: {exc}"
+            ) from exc
     finally:
         if _orig is not None:
             _lp.comports = _orig
@@ -547,8 +552,20 @@ class HardwareObotController(AnimatedObotController):
         )
 
     def _write_motor(self, joint_id: int, position: float, speed: int) -> None:
-        with self._ohbot_lock:
-            ohbot.move(joint_id, position, speed)
+        try:
+            with self._ohbot_lock:
+                ohbot.move(joint_id, position, speed)
+        except (OSError, Exception) as exc:
+            if "serial" in type(exc).__module__.lower() or isinstance(exc, OSError):
+                if not getattr(self, "_serial_error_logged", False):
+                    self._serial_error_logged = True
+                    print(f"[hardware] serial write failed: {exc}")
+                    events.emit(events.LOG, {
+                        "level": "error",
+                        "message": f"serial connection lost: {exc}",
+                    })
+            else:
+                raise
 
 
 class SimulatedObotController(AnimatedObotController):

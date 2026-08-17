@@ -123,9 +123,11 @@ public sealed class EngineProcess : IDisposable
         if (string.IsNullOrWhiteSpace(repoRoot)) return null;
         string[] candidates = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? new[] { Path.Combine(repoRoot, "OhBots", "Scripts", "python.exe"),
-                      Path.Combine(repoRoot, ".venv", "Scripts", "python.exe") }
+                      Path.Combine(repoRoot, ".venv", "Scripts", "python.exe"),
+                      Path.Combine(repoRoot, "venv", "Scripts", "python.exe") }
             : new[] { Path.Combine(repoRoot, "OhBots", "bin", "python"),
-                      Path.Combine(repoRoot, ".venv", "bin", "python") };
+                      Path.Combine(repoRoot, ".venv", "bin", "python"),
+                      Path.Combine(repoRoot, "venv", "bin", "python") };
         return candidates.FirstOrDefault(File.Exists);
     }
 

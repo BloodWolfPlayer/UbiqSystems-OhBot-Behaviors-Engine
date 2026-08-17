@@ -81,6 +81,7 @@ public partial class ShellViewModel : ObservableObject
         RepoRoot = EngineProcess.LocateRepoRoot();
         if (RepoRoot is not null)
         {
+            Logs.SetLogDirectory(Path.Combine(RepoRoot, "gui"));
             Setup.Python.Initialize(RepoRoot);
             Setup.SetRepoRoot(RepoRoot);
         }
