@@ -188,7 +188,7 @@ class AIGestureSettings:
     """
 
     enabled: bool = False
-    # Path to a train.py checkpoint, e.g. mlBehaviour/training_run/best_model.pt.
+    # Path to a train.py checkpoint.
     checkpoint_path: str = ""
     # Must match the --control-hz the checkpoint was trained with (beat2_to_ohbot.py).
     control_hz: float = 20.0

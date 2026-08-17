@@ -235,3 +235,6 @@ gui/**/*.user
 ohbot_data
 
 mlBehaviour/data_pipeline/recordings/*
+
+mlBehaviour/runs/*
+mlBehaviour/legacyTraining/*

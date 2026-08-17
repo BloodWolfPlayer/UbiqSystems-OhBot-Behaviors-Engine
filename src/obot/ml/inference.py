@@ -86,7 +86,7 @@ class GestureModel:
 
     def __init__(self, checkpoint_path: str | Path, device: str = "cpu") -> None:
         ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
-        args = ckpt["args"]
+        args = ckpt.get("args") or ckpt["config"]
         n_axes = int(ckpt["n_axes"])
 
         self.model = OhbotAudioModel(
