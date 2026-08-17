@@ -321,35 +321,6 @@ class AnimatedObotController(ObotController):
                     self._write_motor(j, current[j], self.motion.move_speed)
                     written[j] = current[j]
 
-            ###################### Alternative Setup, Needs Test #############################
-            """
-            with self._offset_lock:
-                ## Basic Setup for MotionOffset and Removing when Timed Out
-                expired: list[MotionOffset] = []
-                for req in self._offset_requests:
-                    if req.duration_s <= 0: 
-                        expired.append(req)
-                        continue 
-                
-                ## Has to Finish in that Tick
-                if req.duration_s <= tick: 
-                    step = req.delta 
-                ## Calculate From Remaining Time
-                else: 
-                    step = req.delta * (tick * req.duration_s)
-
-                ## Adding for this round
-                sums[req.joint_id] += step
-                counts[req.joint_id] += 1
-
-                ## Removing Stuff Done
-                req.delta -= step 
-                req.duration_s -= tick 
-
-            for req in expired: 
-                self._offset_requests.remove(req)
-            """
-            
             # Stream the smoothed pose so a GUI can mirror the face. Gated so the
             # dict is not even built when unobserved; throttled below the tick rate.
             now = time.monotonic()
