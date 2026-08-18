@@ -170,7 +170,26 @@ def estimate_blink_placeholder(n_frames, value=8.0):
 MOUTH_AXES = {"TOPLIP", "BOTTOMLIP"}
 
 
-def calibrate(pairs, top_lip_ratio, sample_every=1, pct=99.0):
+def _calibrate_one_file(npz_path, top_lip_ratio, sample_every):
+    """Worker function for parallel calibration: loads one .npz, extracts raw
+    channels, and returns subsampled arrays per axis.
+
+    Must be a plain module-level function (not a closure/lambda/method) so
+    ProcessPoolExecutor can pickle it.
+
+    Returns (npz_path, dict[axis_name -> np.array] or None, error_str or None).
+    """
+    try:
+        poses, _fps = load_motion_npz(npz_path)
+    except Exception as e:
+        return npz_path, None, str(e)
+    raw = extract_raw_channels(poses, top_lip_ratio=top_lip_ratio)
+    axes = [ax for ax in OHBOT_AXES if ax != "LIDBLINK"]
+    sampled = {ax: raw[ax][::sample_every] for ax in axes}
+    return npz_path, sampled, None
+
+
+def calibrate(pairs, top_lip_ratio, sample_every=1, pct=99.0, n_workers=0):
     """First pass over the dataset: collect raw channel values and turn them
     into a calibration that puts REST (not the dataset's raw min/max) at
     Ohbot's center.
@@ -193,17 +212,44 @@ def calibrate(pairs, top_lip_ratio, sample_every=1, pct=99.0):
     """
     collected = {ax: [] for ax in OHBOT_AXES if ax != "LIDBLINK"}
 
-    for i, (npz_path, _wav_path) in enumerate(pairs):
-        try:
-            poses, _fps = load_motion_npz(npz_path)
-        except Exception as e:
-            print(f"[calibrate] skipping {npz_path}: {e}")
-            continue
-        raw = extract_raw_channels(poses, top_lip_ratio=top_lip_ratio)
-        for ax in collected:
-            collected[ax].append(raw[ax][::sample_every])
-        if (i + 1) % 100 == 0:
-            print(f"[calibrate] scanned {i + 1}/{len(pairs)} files")
+    if n_workers == 0:
+        n_workers = os.cpu_count() or 1
+    n_workers = max(1, min(n_workers, len(pairs))) if pairs else 1
+    print(f"[calibrate] using {n_workers} worker process(es) for {len(pairs)} files")
+
+    n_done = 0
+    if n_workers == 1:
+        for npz_path, _wav_path in pairs:
+            _path, sampled, err = _calibrate_one_file(npz_path, top_lip_ratio, sample_every)
+            if err is not None:
+                print(f"[calibrate] skipping {npz_path}: {err}")
+                continue
+            for ax in collected:
+                collected[ax].append(sampled[ax])
+            n_done += 1
+            if n_done % 100 == 0:
+                print(f"[calibrate] scanned {n_done}/{len(pairs)} files")
+    else:
+        with ProcessPoolExecutor(max_workers=n_workers) as pool:
+            futures = {
+                pool.submit(_calibrate_one_file, npz_path, top_lip_ratio, sample_every): npz_path
+                for npz_path, _wav_path in pairs
+            }
+            for future in as_completed(futures):
+                try:
+                    _path, sampled, err = future.result()
+                except Exception as e:
+                    npz_path = futures[future]
+                    print(f"[calibrate] skipping {npz_path}: {e}")
+                    continue
+                if err is not None:
+                    print(f"[calibrate] skipping {_path}: {err}")
+                    continue
+                for ax in collected:
+                    collected[ax].append(sampled[ax])
+                n_done += 1
+                if n_done % 100 == 0:
+                    print(f"[calibrate] scanned {n_done}/{len(pairs)} files")
 
     calibration = {}
     for ax, chunks in collected.items():
@@ -364,7 +410,9 @@ def run_calibrate(args):
     pairs = find_beat2_pairs(args.beat2_root)
     if args.limit:
         pairs = pairs[: args.limit]
-    calibration = calibrate(pairs, top_lip_ratio=args.top_lip_ratio, sample_every=args.sample_every)
+    calibration = calibrate(pairs, top_lip_ratio=args.top_lip_ratio,
+                            sample_every=args.sample_every,
+                            n_workers=args.workers if args.workers else 0)
     os.makedirs(args.out_dir, exist_ok=True)
     cal_path = os.path.join(args.out_dir, "calibration.json")
     with open(cal_path, "w") as f:
@@ -514,6 +562,10 @@ def build_parser():
 
     p_cal = sub.add_parser("calibrate", parents=[common], help="Scan dataset, compute per-axis min/max")
     p_cal.add_argument("--sample-every", type=int, default=1, help="Subsample frames for speed (e.g. 5)")
+    p_cal.add_argument("--workers", type=int, default=0,
+                        help="Number of parallel worker processes for calibration. "
+                             "Default (0) uses all available CPU cores (os.cpu_count()). "
+                             "Set to 1 to force single-threaded (e.g. for debugging).")
     p_cal.set_defaults(func=run_calibrate)
 
     p_conv = sub.add_parser("convert", parents=[common], help="Convert matched (motion, audio) pairs")
