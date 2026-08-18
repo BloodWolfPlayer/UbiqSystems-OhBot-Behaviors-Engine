@@ -59,6 +59,12 @@ docs/                # detailed documentation
 
 ## Quick start
 
+> **Just want to run it?** Download the latest
+> [release](https://github.com/BloodWolfPlayer/UbiqSystems-OhBot-Behaviors-Engine/releases),
+> extract it and start `OhBotControl` — the app sets Python up for you and only needs the
+> [.NET 10 runtime](https://dotnet.microsoft.com/download/dotnet/10.0) on the machine.
+> The steps below are for working from a checkout.
+
 ### 1. Install
 
 ```bash
@@ -152,6 +158,25 @@ python -m obot.ml mlBehaviour/runs/my_experiment/best_model.pt audio.wav --sim
 Ensure the engine server is running (`python -m obot --serve`) and the GUI is connected to see the predicted motion in the simulator.
 
 Training pipeline and dataset conversion live in [mlBehaviour/](mlBehaviour/README.md).
+
+---
+
+## Building a release
+
+[`scripts/package-release.ps1`](scripts/package-release.ps1) builds the downloadable
+package: the GUI published as **one framework-dependent executable** (all of Avalonia's
+managed and native dependencies bundled inside it, .NET 10 expected on the target machine)
+sitting at the top of the Python engine tree, which is exactly where the GUI looks for it.
+
+```powershell
+powershell -File scripts/package-release.ps1 -Runtime win-x64,linux-x64
+```
+
+Archives and a `SHA256SUMS` file land in `dist/` — about 12 MB each, 79 files extracted.
+The Python payload is taken from `git ls-files`, so anything untracked (your `config.json`
+with its API key, the gigabytes of downloaded voice models in `ohbotData/`, the venv) can
+never end up in a release. `config.json` is seeded from `config.example.json` so a fresh
+download starts with the gesture model enabled and the bundled checkpoint registered.
 
 ---
 
