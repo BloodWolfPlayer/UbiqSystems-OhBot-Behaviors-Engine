@@ -18,7 +18,13 @@ This directory contains the following key files:
 The ML training pipeline requires Python 3.10+ and the following dependencies:
 
 ```bash
-pip install torch numpy
+pip install torch numpy scipy
+```
+
+If you have already installed the dependencies via the main application, you can skip this step. Otherwise, you can install the required dependencies by running:
+
+```bash
+pip install -r requirements/ml.txt
 ```
 
 
@@ -83,4 +89,24 @@ You can stop any of them and resume later without affecting the others.
 | `--seed` | int | `0` | Random seed for reproducibility (data splits, weight init) |
 | `--limit` | int | None | Only use the first N clips (useful for quick pipeline tests) |
 | `--overfit-one-batch` | flag | off | Pipeline smoke test: train on a single batch repeatedly with no val split |
+| `--yaw-center-weight` | float | `0.1` | Weight of the yaw-centering loss (0 to disable) |
+| `--yaw-center-ramp` | float | `0.3` | Fraction of each clip over which the centering loss ramps up (e.g. 0.3 = last 30%) |
+| `--yaw-axis` | int | `1` | Index of the HEADTURN (yaw) axis in the motion tensor |
 | `--device` | string | `"cuda"` if available, else `"cpu"` | PyTorch device to train on (e.g. `cpu`, `cuda`, `cuda:1`) |
+
+### Yaw centering loss
+
+The model tends to drift the head yaw (HEADTURN) toward one side by the end of a clip. An auxiliary loss penalizes the yaw axis for deviating from neutral (5.0) at the end of each clip. The penalty is not applied uniformly -- it ramps linearly from zero to full strength over the final portion of the clip, controlled by `--yaw-center-ramp`. This preserves natural head-turning during speech while gently pulling yaw back to center as the clip ends.
+
+Only the yaw axis is affected; pitch (HEADNOD) and roll (HEADTILT) remain free to follow the data.
+
+```bash
+# Default (enabled at weight 0.1, ramp over last 30% of clip)
+python train.py --name default_centering --data-dir ./ohbot_data
+
+# Stronger centering, shorter ramp (last 20%)
+python train.py --name strong_center --data-dir ./ohbot_data --yaw-center-weight 0.2 --yaw-center-ramp 0.2
+
+# Disable centering entirely
+python train.py --name no_center --data-dir ./ohbot_data --yaw-center-weight 0
+```

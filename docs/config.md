@@ -43,6 +43,6 @@ Copy `config.example.json` to `config.json` and fill in the keys you need. `conf
 All of `speech`, `motion`, `behaviors` and `ml` are optional; missing keys use built-in defaults.
 
 Paths in `speech.gesture.checkpoint_path`, `ml.models[].path`, `ml.preview_wav` and
-`ml.dataset_manifest` may be absolute or repo-root-relative — relative ones resolve against
+`ml.dataset_manifest` may be absolute or repo-root-relative. Relative ones resolve against
 the checkout, not the working directory, so the same `config.json` works however the engine
 was launched (`ml/registry.py`).

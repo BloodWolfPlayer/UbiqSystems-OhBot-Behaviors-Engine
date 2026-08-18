@@ -28,6 +28,27 @@ You can have many independent runs side by side:
     python train.py --name test2 --data-dir ./ohbot_data --lr 0.0005 --epochs 50
 
 ------------------------------------------------------------------------------
+YAW CENTERING LOSS
+------------------------------------------------------------------------------
+The trained model tends to drift the head yaw (HEADTURN) toward one side by
+the end of a clip. To counteract this, an auxiliary loss nudges the yaw axis
+back toward neutral (5.0) at the end of each clip. The penalty is NOT applied
+uniformly -- it ramps linearly from zero to full strength over the last portion
+of the clip, so normal head-turn behaviour during speech is preserved.
+
+Only the yaw axis is affected; pitch (HEADNOD) and roll (HEADTILT) are free
+to remain wherever the data takes them.
+
+Arguments:
+    --yaw-center-weight  Weight of the centering loss (default 0.1, 0 to disable)
+    --yaw-center-ramp    Fraction of clip where the ramp is active (default 0.3,
+                         i.e. loss ramps from 0 to full over the last 30%)
+    --yaw-axis           Index of the HEADTURN axis (default 1)
+
+Example:
+    python train.py --name centered --data-dir ./ohbot_data --yaw-center-weight 0.15 --yaw-center-ramp 0.25
+
+------------------------------------------------------------------------------
 RECOMMENDED FIRST RUN: verify the pipeline, not the model
 ------------------------------------------------------------------------------
     python train.py --name smoke --data-dir ./ohbot_data --overfit-one-batch --epochs 200
@@ -108,7 +129,34 @@ def baseline_mse(target, mask, rest_value=5.0):
     return masked_mse(rest, target, mask).item()
 
 
-def run_epoch(model, loader, optimizer, device, train=True):
+def yaw_centering_loss(pred, mask, lengths, yaw_axis=1, ramp_fraction=0.3, neutral=5.0):
+    """Penalize yaw (HEADTURN) deviating from neutral at the end of each clip.
+
+    The penalty ramps linearly from 0 to 1 over the last `ramp_fraction` of
+    each clip, so it only gradually kicks in toward the end.
+    """
+    B, T, _ = pred.shape
+    device = pred.device
+
+    t_idx = torch.arange(T, device=device).float().unsqueeze(0)  # (1, T)
+    clip_lengths = lengths.to(device).float().unsqueeze(1)  # (B, 1)
+
+    ramp_start = clip_lengths * (1.0 - ramp_fraction)  # (B, 1)
+    ramp_duration = clip_lengths * ramp_fraction        # (B, 1)
+
+    ramp = ((t_idx - ramp_start) / ramp_duration.clamp(min=1)).clamp(0.0, 1.0)  # (B, T)
+    ramp = ramp * mask.float()  # zero out padding
+
+    yaw_pred = pred[:, :, yaw_axis]  # (B, T)
+    yaw_diff2 = (yaw_pred - neutral) ** 2  # (B, T)
+
+    weighted = (yaw_diff2 * ramp).sum()
+    denom = ramp.sum().clamp(min=1)
+    return weighted / denom
+
+
+def run_epoch(model, loader, optimizer, device, train=True,
+              yaw_center_weight=0.0, yaw_center_ramp=0.3, yaw_axis=1):
     model.train(train)
     total_loss, n_batches = 0.0, 0
     for batch in loader:
@@ -120,6 +168,14 @@ def run_epoch(model, loader, optimizer, device, train=True):
         with torch.set_grad_enabled(train):
             pred = model(features, lengths=lengths)
             loss = masked_mse(pred, motion, mask)
+
+            if yaw_center_weight > 0:
+                yaw_loss = yaw_centering_loss(
+                    pred, mask, lengths,
+                    yaw_axis=yaw_axis, ramp_fraction=yaw_center_ramp,
+                )
+                loss = loss + yaw_center_weight * yaw_loss
+
             if train:
                 optimizer.zero_grad()
                 loss.backward()
@@ -185,6 +241,14 @@ def main():
     p.add_argument("--limit", type=int, default=None, help="Only use the first N clips (quick tests)")
     p.add_argument("--overfit-one-batch", action="store_true",
                    help="Pipeline smoke test: train on a single batch repeatedly, no val split.")
+    p.add_argument("--yaw-center-weight", type=float, default=0.1,
+                   help="Weight for the yaw-centering loss that nudges HEADTURN back to neutral "
+                        "at the end of each clip (0 to disable, default 0.1)")
+    p.add_argument("--yaw-center-ramp", type=float, default=0.3,
+                   help="Fraction of the clip over which the yaw-centering loss ramps up "
+                        "(e.g. 0.3 = last 30%% of the clip, default 0.3)")
+    p.add_argument("--yaw-axis", type=int, default=1,
+                   help="Index of the yaw (HEADTURN) axis in the motion tensor (default 1)")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = p.parse_args()
 
@@ -222,6 +286,9 @@ def main():
             "seed": args.seed,
             "limit": args.limit,
             "overfit_one_batch": args.overfit_one_batch,
+            "yaw_center_weight": args.yaw_center_weight,
+            "yaw_center_ramp": args.yaw_center_ramp,
+            "yaw_axis": args.yaw_axis,
         }
         os.makedirs(run_dir, exist_ok=True)
         save_config(run_dir, config)
@@ -298,11 +365,17 @@ def main():
 
     feature_stats = (mean, std)
 
+    yaw_kwargs = {
+        "yaw_center_weight": config.get("yaw_center_weight", 0.0),
+        "yaw_center_ramp": config.get("yaw_center_ramp", 0.3),
+        "yaw_axis": config.get("yaw_axis", 1),
+    }
+
     for epoch in range(start_epoch, config["epochs"] + 1):
-        train_loss = run_epoch(model, train_loader, optimizer, device, train=True)
+        train_loss = run_epoch(model, train_loader, optimizer, device, train=True, **yaw_kwargs)
 
         if val_loader is not None:
-            val_loss = run_epoch(model, val_loader, optimizer, device, train=False)
+            val_loss = run_epoch(model, val_loader, optimizer, device, train=False, **yaw_kwargs)
             log.info(f"epoch {epoch:4d}/{config['epochs']}  train_loss={train_loss:.4f}  val_loss={val_loss:.4f}")
             if val_loss < best_val:
                 best_val = val_loss
