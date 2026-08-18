@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "obot"
-version = "0.1.0"
+version = "1.0.0"
 description = "Voice pipeline for the OhBot chatbot robot: streams LLM responses, parses action/emotion markers, and drives speech and servo motion in real time."
 readme = "README.md"
 requires-python = ">=3.12"
