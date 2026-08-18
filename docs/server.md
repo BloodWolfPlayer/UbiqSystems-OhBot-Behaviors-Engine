@@ -16,7 +16,9 @@ It binds to `127.0.0.1` only (no auth by design; LAN/Pi mode is a later mileston
 it per session (`virtual`, `sim`, `hardware`, or `console`). `virtual` runs the full
 motor mixer and real TTS with no window and streams joint positions on the `joints`
 event topic, so a GUI can draw the face itself. `--no-gesture-model` is applied once
-at startup (there's no per-session override, and no GUI control for it yet).
+at startup and overrides `config.json` for the whole process; the GUI's **ML Control**
+page edits the same settings live (and can load a checkpoint into a running session),
+so the flag is mainly for starting a server with the model deliberately off.
 
 ## Protocol
 
@@ -38,6 +40,19 @@ and `error`.
 | `session_start` / `session_stop` | `{backend, model, controller}`, starts/stops a conversation |
 | `send_text` / `interrupt` / `set_mic_mode` | one typed turn; word-boundary interrupt; `vad`/`ptt`/`muted` |
 | `get_state` | `{session, backend, model, controller, state, mic_mode, tts_engine_active}` |
+| `set_joint` / `release_joint` / `release_all_joints` | hold one joint at an absolute position (0..10) / hand it back to the mixer |
+| `list_emotions` / `set_emotion` | emotion table; apply one emotion's default pose |
+| `list_ml_models` | gesture-model library: named entries from `ml.models` plus every `*.pt` found under the scan dirs, with size/mtime and which one is selected |
+| `inspect_ml_model` | `{path}` → a checkpoint's axes, mel/conv/GRU sizes, parameter count, epoch, best val loss. Imports torch on the host |
+| `ml_status` | torch/CUDA availability (`{probe: true}` to really import torch), the configured gesture settings, which checkpoint the live session holds, and a `requirements` report: every module/pipeline file the gesture model needs with its own verdict, plus the engine's own `sys.executable` so the GUI can install into the right environment |
+| `ml_reload_model` | load the configured checkpoint into the running session without restarting it; `{force: true}` reloads the same path (after re-training) |
+| `ml_preview` / `ml_preview_stop` | play a wav through a checkpoint on the session's controller (returns when playback ends) / cut it short |
+| `list_ml_clips` / `ml_replay_clip` | browse a converted BEAT2 dataset; replay one clip's recorded motion as ground truth |
+
+The `ml_*` methods back the GUI's ML Control page. The model *library* itself lives in
+`config.json`'s `ml` section and is edited through `set_config` like every other section —
+these methods only cover what the GUI cannot do itself: look at the engine host's
+filesystem and checkpoints, and drive a live session.
 
 ## Smoke test
 

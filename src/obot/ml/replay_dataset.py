@@ -27,24 +27,10 @@ from pathlib import Path
 import numpy as np
 import websockets
 
-from ..robot import joints
-
-# src/obot/ml/replay_dataset.py -> ml -> obot -> src -> repo root.
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_MANIFEST = _REPO_ROOT / "mlBehaviour" / "ohbot_data" / "manifest.csv"
-
-# Same mapping as ml/inference.py's AXIS_TO_JOINT, duplicated here rather than
-# imported so this tool doesn't drag in torch just to look at recorded data.
-AXIS_TO_JOINT: dict[str, int] = {
-    "HEADNOD": joints.HEADNOD,
-    "HEADTURN": joints.HEADTURN,
-    "EYETURN": joints.EYETURN,
-    "EYETILT": joints.EYETILT,
-    "LIDBLINK": joints.LIDBLINK,
-    "TOPLIP": joints.TOPLIP,
-    "BOTTOMLIP": joints.BOTTOMLIP,
-    "HEADTILT": joints.HEADTILT,
-}
+# registry.py holds the axis -> joint mapping (and the default dataset location)
+# without importing torch, so this tool stays usable for looking at recorded data
+# on a checkout that never installed the ML extras.
+from .registry import AXIS_TO_JOINT, DEFAULT_MANIFEST
 
 
 def read_manifest(manifest_path: Path) -> list[dict]:

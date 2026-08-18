@@ -138,4 +138,56 @@ public sealed class PythonEnvironmentServiceTests : IDisposable
         Assert.Contains(name, new[] { "windows.txt", "linux.txt", "pi.txt" });
         Assert.Equal(OperatingSystem.IsWindows(), name == "windows.txt");
     }
+
+    // -- InstallRequirementsAsync (the ML Control page's dependency installer) ------------
+    //
+    // The pip run itself isn't exercised here (a real torch download has no business in a
+    // unit-test suite); what is covered is everything that decides *whether* pip runs and
+    // against what, since those are the failures a user would otherwise see as a hang.
+
+    [Fact]
+    public async Task InstallRequirements_MissingInterpreter_FailsWithoutRunningPip()
+    {
+        var progress = new List<SetupProgress>();
+        var result = await _service.InstallRequirementsAsync(
+            Path.Combine(_repoRoot, "nope", "python.exe"), _repoRoot, "requirements/ml.txt",
+            new Progress<SetupProgress>(progress.Add), CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.Contains("not found on this machine", result.Message);
+    }
+
+    [Fact]
+    public async Task InstallRequirements_MissingRequirementsFile_FailsCleanly()
+    {
+        // A file that exists just enough to pass the interpreter check.
+        var exe = CreateFakeVenv("OhBots", "3.12.10");
+
+        var result = await _service.InstallRequirementsAsync(
+            exe, _repoRoot, "requirements/ml.txt",
+            new Progress<SetupProgress>(_ => { }), CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.Contains("requirements file not found", result.Message);
+    }
+
+    [Fact]
+    public async Task InstallRequirements_ResolvesTheEngineReportedRelativePath()
+    {
+        var exe = CreateFakeVenv("OhBots", "3.12.10");
+        // The engine reports POSIX-style relative paths; they must resolve on Windows too.
+        var reqDir = Path.Combine(_repoRoot, "requirements");
+        Directory.CreateDirectory(reqDir);
+        File.WriteAllText(Path.Combine(reqDir, "ml.txt"), "# nothing to install\n");
+
+        var result = await _service.InstallRequirementsAsync(
+            exe, _repoRoot, "requirements/ml.txt",
+            new Progress<SetupProgress>(_ => { }), CancellationToken.None);
+
+        // The fake interpreter can't actually run, so this reaches the pip step and fails
+        // there  proof the relative path resolved, rather than bailing out earlier. It must
+        // come back as a result, not an unhandled exception.
+        Assert.False(result.Ok);
+        Assert.Contains("could not run", result.Message);
+    }
 }

@@ -28,6 +28,7 @@ from ..robot.controller import (
     VirtualObotController,
 )
 from ..core.orchestrator import RobotPipeline
+from ..ml.preview import MLPreview
 
 # repo root is four levels up: server/session.py -> server -> obot -> src -> root
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -97,6 +98,8 @@ class ServerSession:
         self._active_engine: str | None = None
         self._running = False
         self._unsub_speech = None
+        # Model/clip preview slot for the GUI's ML Control page (one playback at a time).
+        self._ml_preview = MLPreview()
 
     # -- lifecycle ---------------------------------------------------------------------
 
@@ -138,6 +141,10 @@ class ServerSession:
         if not self._running:
             return {"session": False}
         self._running = False
+
+        # Cut a running ML preview first: its pose loop exits within a tick, so the awaits
+        # below leave it fully unwound before the controller it drives is closed.
+        self._ml_preview.stop()
 
         # Cut any in-flight speech and unblock the worker.
         if self._interrupt is not None:
@@ -369,6 +376,85 @@ class ServerSession:
         markers use in RobotPipeline, exposed for the GUI's manual control panel."""
         if self._controller is not None:
             await self._controller.set_emotion(emotion)
+
+    # -- ML gesture model ----------------------------------------------------------------
+
+    def ml_status(self) -> dict:
+        """What this session is actually doing with the gesture model.
+
+        ``loaded_checkpoint`` is the file the live speech engine holds in memory, which
+        can differ from config.json's ``speech.gesture.checkpoint_path`` between a save
+        and a reload -- that gap is exactly what the GUI needs to show.
+        """
+        speech = getattr(self._controller, "speech", None)
+        loaded = getattr(speech, "gesture_checkpoint", None)
+        return {
+            "session": self._running,
+            # Only meaningful while running: controller_kind keeps the last value after a
+            # stop, and reporting that would have the GUI describe a session that is gone.
+            "controller": self.controller_kind if self._running else None,
+            # The console controller has no servos, so a preview is audio-only there.
+            "pose_capable": bool(self._running and self.controller_kind != "console"),
+            "gesture_loaded": loaded is not None,
+            "loaded_checkpoint": loaded,
+            **self._ml_preview.status(),
+        }
+
+    async def reload_gesture_model(self, force: bool = False) -> dict:
+        """Rebuild the live speech engine's gesture model from the current config.
+
+        Runs in a worker thread: loading a checkpoint imports torch the first time,
+        which would otherwise block the whole control server for seconds.
+        """
+        speech = getattr(self._controller, "speech", None)
+        if speech is None or not hasattr(speech, "reload_gesture_model"):
+            raise RuntimeError(
+                f"the '{self.controller_kind or 'current'}' controller has no speech engine "
+                "to load a gesture model into."
+            )
+        loaded = await asyncio.to_thread(speech.reload_gesture_model, force)
+        checkpoint = speech.gesture_checkpoint
+        events.emit(events.LOG, {
+            "level": "info" if loaded else "warn",
+            "message": (
+                f"gesture model loaded: {checkpoint}" if loaded
+                else "gesture model not loaded; the scripted mouth track is in use."
+            ),
+        })
+        return self.ml_status()
+
+    async def ml_preview(
+        self,
+        *,
+        checkpoint: str,
+        wav: str,
+        control_hz: float,
+        intensity: float,
+        device: str,
+    ) -> dict:
+        """Play one audio clip through ``checkpoint`` on this session's controller."""
+        if self._controller is None:
+            raise RuntimeError("no controller in this session.")
+        result = await self._ml_preview.play_model(
+            self._controller, checkpoint=checkpoint, wav=wav,
+            control_hz=control_hz, intensity=intensity, device=device,
+        )
+        result["pose_capable"] = self.controller_kind != "console"
+        return result
+
+    async def ml_replay_clip(self, *, clip_path: str, speed: float, play_audio: bool) -> dict:
+        """Replay one recorded dataset clip (ground truth) on this session's controller."""
+        if self._controller is None:
+            raise RuntimeError("no controller in this session.")
+        result = await self._ml_preview.play_clip(
+            self._controller, clip_path=clip_path, speed=speed, play_audio=play_audio,
+        )
+        result["pose_capable"] = self.controller_kind != "console"
+        return result
+
+    def ml_preview_stop(self) -> bool:
+        """Cut a running preview/replay short. False when nothing was playing."""
+        return self._ml_preview.stop()
 
     # -- turn worker -------------------------------------------------------------------
 

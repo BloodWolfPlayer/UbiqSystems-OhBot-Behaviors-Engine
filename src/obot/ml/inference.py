@@ -18,9 +18,9 @@ import numpy as np
 import torch
 
 from ..robot import joints
+from .registry import AXIS_ORDER, AXIS_TO_JOINT, REPO_ROOT, resolve_path
 
-# src/obot/ml/inference.py -> parents[3] is the repo root.
-_ML_DIR = Path(__file__).resolve().parents[3] / "mlBehaviour"
+_ML_DIR = REPO_ROOT / "mlBehaviour"
 
 
 def _load_module(name: str, filename: str) -> ModuleType:
@@ -42,22 +42,8 @@ log_mel_spectrogram = _features_mod.log_mel_spectrogram
 normalize_features = _features_mod.normalize_features
 resample_channel = _convert_mod.resample_channel
 
-# Column order beat2_to_ohbot.py writes motion targets in (OHBOT_AXES) -- a
-# checkpoint's output columns line up with this, in order, left to right.
-AXIS_ORDER: tuple[str, ...] = (
-    "HEADNOD", "HEADTURN", "EYETURN", "EYETILT", "LIDBLINK", "TOPLIP", "BOTTOMLIP", "HEADTILT",
-)
-
-AXIS_TO_JOINT: dict[str, int] = {
-    "HEADNOD": joints.HEADNOD,
-    "HEADTURN": joints.HEADTURN,
-    "EYETURN": joints.EYETURN,
-    "EYETILT": joints.EYETILT,
-    "LIDBLINK": joints.LIDBLINK,
-    "TOPLIP": joints.TOPLIP,
-    "BOTTOMLIP": joints.BOTTOMLIP,
-    "HEADTILT": joints.HEADTILT,
-}
+# AXIS_ORDER / AXIS_TO_JOINT live in ml/registry.py (re-exported above): the GUI's
+# model listing and replay_dataset.py need the same mapping without importing torch.
 
 # Sample rate beat2_to_ohbot.py resampled training audio to before extracting
 # features -- inference must feed the model audio at the same rate.
@@ -85,7 +71,9 @@ class GestureModel:
     """Wraps an OhbotAudioModel loaded from a train.py checkpoint."""
 
     def __init__(self, checkpoint_path: str | Path, device: str = "cpu") -> None:
-        ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
+        # Repo-root-relative paths (what config.json stores) must resolve the same way
+        # whatever directory the engine was launched from.
+        ckpt = torch.load(resolve_path(checkpoint_path), map_location=device, weights_only=False)
         args = ckpt.get("args") or ckpt["config"]
         n_axes = int(ckpt["n_axes"])
 

@@ -78,6 +78,62 @@ public sealed class EngineApi
     /// (Emotion) markers use. Persists until the next call. Needs an active session.</summary>
     public Task SetEmotionAsync(string emotion) => _client.CallAsync("set_emotion", new { emotion });
 
+    // -- ML gesture model ---------------------------------------------------------------
+    //
+    // The model library itself (config.json's "ml" section) is edited like any other
+    // config section, through Get/SetConfigAsync. These calls cover what only the engine
+    // host can answer  its filesystem, its checkpoints, its torch install  plus driving
+    // a live session.
+
+    /// <summary>Registered + auto-discovered gesture-model checkpoints on the engine host.</summary>
+    public async Task<MlModelList> ListMlModelsAsync() =>
+        (await _client.CallAsync<MlModelList>("list_ml_models",
+            timeout: TimeSpan.FromSeconds(30)).ConfigureAwait(false))!;
+
+    /// <summary>Open a checkpoint and report its shape/training metadata. Needs torch on
+    /// the engine host, and pays its import on the first call  hence the long timeout.</summary>
+    public async Task<MlCheckpointInfo> InspectMlModelAsync(string path) =>
+        (await _client.CallAsync<MlCheckpointInfo>("inspect_ml_model", new { path },
+            timeout: TimeSpan.FromSeconds(120)).ConfigureAwait(false))!;
+
+    /// <summary>Runtime + live-session state of the gesture model. <paramref name="probe"/>
+    /// imports torch on the host to answer the CUDA question; without it CudaAvailable is
+    /// null ("not asked") and the call is cheap.</summary>
+    public async Task<MlStatus> GetMlStatusAsync(bool probe = false) =>
+        (await _client.CallAsync<MlStatus>("ml_status", new { probe },
+            timeout: TimeSpan.FromSeconds(probe ? 120 : 30)).ConfigureAwait(false))!;
+
+    /// <summary>Load the configured checkpoint into the running session (no restart).
+    /// <paramref name="force"/> reloads the same path again  use it after re-training.</summary>
+    public async Task<MlStatus> ReloadMlModelAsync(bool force = false) =>
+        (await _client.CallAsync<MlStatus>("ml_reload_model", new { force },
+            timeout: TimeSpan.FromSeconds(180)).ConfigureAwait(false))!;
+
+    /// <summary>Play one audio file through a checkpoint on the running session's robot.
+    /// Returns when playback ends (or StopMlPreviewAsync cuts it short), so the timeout
+    /// has to cover a whole clip plus the model load.</summary>
+    public async Task<MlPreviewResult> MlPreviewAsync(
+        string checkpoint, string wav, double controlHz, double intensity, string device) =>
+        (await _client.CallAsync<MlPreviewResult>("ml_preview",
+            new { checkpoint, wav, control_hz = controlHz, intensity, device },
+            timeout: TimeSpan.FromMinutes(10)).ConfigureAwait(false))!;
+
+    /// <summary>Replay one recorded dataset clip (ground truth, not a prediction).</summary>
+    public async Task<MlPreviewResult> MlReplayClipAsync(string path, double speed, bool playAudio) =>
+        (await _client.CallAsync<MlPreviewResult>("ml_replay_clip",
+            new { path, speed, play_audio = playAudio },
+            timeout: TimeSpan.FromMinutes(10)).ConfigureAwait(false))!;
+
+    /// <summary>Cut a running preview/replay short. Handled concurrently with the
+    /// still-pending preview call, which then returns with Stopped = true.</summary>
+    public Task StopMlPreviewAsync() => _client.CallAsync("ml_preview_stop");
+
+    /// <summary>Clips of a converted BEAT2 dataset (beat2_to_ohbot.py's manifest.csv).</summary>
+    public async Task<MlClipList> ListMlClipsAsync(string? manifest = null) =>
+        (await _client.CallAsync<MlClipList>("list_ml_clips",
+            manifest is null ? null : new { manifest },
+            timeout: TimeSpan.FromSeconds(30)).ConfigureAwait(false))!;
+
     public async Task<SessionState> GetStateAsync() =>
         (await _client.CallAsync<SessionState>("get_state").ConfigureAwait(false))!;
 }

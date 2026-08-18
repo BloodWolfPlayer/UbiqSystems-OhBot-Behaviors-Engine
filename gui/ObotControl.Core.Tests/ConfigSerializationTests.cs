@@ -46,9 +46,14 @@ public class ConfigSerializationTests
         Assert.True(cfg.Speech.Gesture.Extra is null or { Count: 0 });
         Assert.True(cfg.Motion.Extra is null or { Count: 0 });
         Assert.True(cfg.Behaviors.Extra is null or { Count: 0 });
+        Assert.True(cfg.Ml.Extra is null or { Count: 0 });
         foreach (var (_, module) in cfg.Behaviors.Modules())
         {
             Assert.True(module.Extra is null or { Count: 0 });
+        }
+        foreach (var entry in cfg.Ml.Models)
+        {
+            Assert.True(entry.Extra is null or { Count: 0 });
         }
     }
 
@@ -69,6 +74,17 @@ public class ConfigSerializationTests
         Assert.Equal(200.0, cfg.Motion.LipRateLimit, 3);
         Assert.True(cfg.Behaviors.SpeakingSway.Enabled);
         Assert.Equal(0.6, cfg.Behaviors.SpeakingSway.Intensity, 3);
+
+        // The ML Control page's contract: gesture settings plus the model library.
+        Assert.True(cfg.Speech.Gesture.Enabled);
+        Assert.Equal("src/obot/ml/models/halfSize_longRun.pt", cfg.Speech.Gesture.CheckpointPath);
+        Assert.Equal(20.0, cfg.Speech.Gesture.ControlHz, 3);
+        Assert.Equal("cpu", cfg.Speech.Gesture.Device);
+        Assert.False(cfg.Speech.Gesture.ScriptedMouth);
+        Assert.Equal("mlBehaviour/sample_clip.wav", cfg.Ml.PreviewWav);
+        var model = Assert.Single(cfg.Ml.Models);
+        Assert.Equal("src/obot/ml/models/halfSize_longRun.pt", model.Path);
+        Assert.False(string.IsNullOrWhiteSpace(model.Name));
     }
 
     [Fact]
@@ -93,6 +109,36 @@ public class ConfigSerializationTests
         Assert.Equal(45.5, back.Speech.Tts.FailureCooldownS, 3);
         Assert.Equal(0.02, back.Motion.TickS, 3);
         Assert.Equal(190, back.Speech.Tts.Local.RateWpm);
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesMlSection()
+    {
+        var cfg = LoadExample();
+        cfg.Speech.Gesture.ScriptedMouth = true;
+        cfg.Speech.Gesture.ControlHz = 25.0;
+        cfg.Ml.Models.Add(new MlModelEntry
+        {
+            Name = "run7", Path = "mlBehaviour/runs/run7/best_model.pt", Notes = "wider GRU",
+        });
+        cfg.Ml.ScanDirs.Add("D:/checkpoints");
+        cfg.Ml.DatasetManifest = "mlBehaviour/ohbot_data/manifest.csv";
+
+        var json = ObotJson.Serialize(cfg);
+
+        // Wire keys the Python engine reads (ml/config.py, speech/config.py).
+        Assert.Contains("\"scripted_mouth\":true", json);
+        Assert.Contains("\"control_hz\":25", json);
+        Assert.Contains("\"scan_dirs\":", json);
+        Assert.Contains("\"preview_wav\":", json);
+        Assert.Contains("\"dataset_manifest\":", json);
+
+        var back = ObotJson.Deserialize<ObotConfig>(json)!;
+        Assert.True(back.Speech.Gesture.ScriptedMouth);
+        Assert.Equal(25.0, back.Speech.Gesture.ControlHz, 3);
+        Assert.Equal(2, back.Ml.Models.Count);
+        Assert.Equal("wider GRU", back.Ml.Models[1].Notes);
+        Assert.Equal("D:/checkpoints", Assert.Single(back.Ml.ScanDirs));
     }
 
     [Fact]

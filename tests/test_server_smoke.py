@@ -128,6 +128,44 @@ async def run_checks(port: int, controller: str) -> None:
             g = await client.call("list_gemini_models")
             print(f"  [ok] list_gemini_models -> {len(g['models'])}")
 
+        # ML control: the library/status calls must work whether or not torch is
+        # installed on this host -- the GUI's ML Control page opens before anything else.
+        library = await client.call("list_ml_models")
+        assert "models" in library and "scan_dirs" in library
+        print(f"  [ok] list_ml_models -> {len(library['models'])} checkpoint(s) "
+              f"in {', '.join(library['scan_dirs'])}")
+
+        ml = await client.call("ml_status")
+        assert "torch_available" in ml and "enabled" in ml
+        assert ml["session"] is False, "ml_status reported a session before one started"
+        print(f"  [ok] ml_status (torch={ml['torch_available']}, gesture_enabled={ml['enabled']})")
+
+        # The dependency report drives the GUI's install card: every requirement is listed
+        # with its own verdict, and the engine names the interpreter to install into.
+        req = ml["requirements"]
+        assert req["python"], "requirements report must name the engine's own interpreter"
+        assert req["requirements_exists"] is True, f"{req['requirements_file']} is missing"
+        names = {item["name"] for item in req["items"]}
+        assert {"torch", "numpy", "scipy", "soundfile"} <= names, names
+        assert req["ready"] == (not req["missing"])
+        assert set(req["installable"]) <= set(req["missing"])
+        print(f"  [ok] ml_status requirements (ready={req['ready']}, "
+              f"missing={req['missing'] or 'none'}, python={req['python_version']})")
+
+        clips = await client.call("list_ml_clips")
+        assert "clips" in clips and "manifest" in clips
+        print(f"  [ok] list_ml_clips -> {len(clips['clips'])} clip(s) from {clips['manifest']}")
+
+        # Reading a checkpoint needs torch; without it the RPC must fail cleanly rather
+        # than taking the server down, which is what suppressing RuntimeError checks here.
+        if library["models"]:
+            first = library["models"][0]["path"]
+            with contextlib.suppress(RuntimeError):
+                info = await client.call("inspect_ml_model", path=first)
+                assert info["n_axes"] > 0 and info["parameters"] > 0
+                print(f"  [ok] inspect_ml_model {first} -> {info['n_axes']} axes, "
+                      f"{info['parameters']:,} params")
+
         state = await client.call("session_start", backend="scripted",
                                   model="", controller=controller)
         assert state["session"] is True and state["controller"] == controller
@@ -176,6 +214,18 @@ async def run_checks(port: int, controller: str) -> None:
             released = await _wait_joint_value(client, "TopLip", neutral_top_lip, tolerance=0.3, timeout=5.0)
             assert released, "TopLip did not return to the Neutral baseline"
             print("  [ok] set_emotion / list_emotions apply and clear a persistent default pose")
+
+            # Loading the gesture model into the live session: with torch absent (or the
+            # feature off) this reports "not loaded" instead of failing, and the session
+            # keeps using the scripted mouth track.
+            reloaded = await client.call("ml_reload_model")
+            assert reloaded["session"] is True
+            print(f"  [ok] ml_reload_model (loaded={reloaded['gesture_loaded']})")
+
+            # Nothing is playing, so this is a no-op -- the point is that a stray Stop
+            # click is answered rather than erroring.
+            assert (await client.call("ml_preview_stop"))["stopped"] is False
+            print("  [ok] ml_preview_stop with nothing playing")
 
         await client.call("send_text", text="Hello there [Nod] (Happy) I am Ms Mimic. "
                                             "This is a fairly long test sentence so there is "

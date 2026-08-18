@@ -6,6 +6,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from .ml.config import MLSettings
 from .robot.behaviors import BehaviorSettings
 from .speech.config import MotionSettings, SpeechSettings
 
@@ -51,6 +52,9 @@ class Config:
     speech: SpeechSettings = field(default_factory=SpeechSettings)
     motion: MotionSettings = field(default_factory=MotionSettings)
     behaviors: BehaviorSettings = field(default_factory=BehaviorSettings)
+    # The gesture-model library the GUI's ML Control page manages. Only that page
+    # reads it -- the speech engine takes its checkpoint from speech.gesture.
+    ml: MLSettings = field(default_factory=MLSettings)
 
     _path: Path | None = field(default=None, repr=False, compare=False)
 
@@ -86,6 +90,7 @@ class Config:
             "speech": self.speech.to_dict(),
             "motion": self.motion.to_dict(),
             "behaviors": self.behaviors.to_dict(),
+            "ml": self.ml.to_dict(),
         }
 
     @classmethod
@@ -120,6 +125,7 @@ class Config:
             speech=SpeechSettings.from_dict(data.get("speech")),
             motion=MotionSettings.from_dict(data.get("motion")),
             behaviors=BehaviorSettings.from_dict(data.get("behaviors")),
+            ml=MLSettings.from_dict(data.get("ml")),
         )
         cfg._path = path
         return cfg

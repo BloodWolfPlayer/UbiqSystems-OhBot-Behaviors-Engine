@@ -31,6 +31,23 @@ codebase runs natively on **Windows, Linux and the Raspberry Pi**.
   joint at its current pose (no jump), then dragging a slider overrides that motor in the
   engine's mixer while ambient behaviors keep running on the rest. **Release** hands
   everything back to automatic control. Needs a running session (any backend/controller).
+- **ML Control**: everything about the AI gesture model  the BEAT2-trained checkpoint that
+  drives head/eyes/lids/lips straight from the speech waveform instead of the scripted
+  loudness-envelope mouth track. Because the ML extras (torch and friends) are a large
+  optional download, the page starts with a **dependency checklist** whenever something is
+  missing: it names each requirement, shows which interpreter the engine is running on, and
+  installs `requirements/ml.txt` into it at the press of a button, streaming pip's output to
+  the Logs tab. torch is imported lazily, so a running session picks it up with no restart.
+  The **model library** lists the checkpoints named in
+  `config.json` plus everything found under `mlBehaviour/runs/` and `src/obot/ml/models/` on
+  the engine host: pick which one drives speech, register a new one by path (with a name and
+  notes), or **Inspect** one to see how many axes it drives, its mel/conv/GRU sizes,
+  parameter count, epoch reached and best validation loss. Below that, the inference
+  settings (device, control rate, **gesture intensity  applies live while the robot talks**,
+  and "keep the lips on the scripted track"), a torch/CUDA runtime check, and **Preview**:
+  play any wav through the selected checkpoint on the live robot, or replay a recorded BEAT2
+  training clip as ground truth to compare against. Saving also loads the checkpoint into a
+  running session, so swapping models doesn't need a session restart.
 - **Logs**: engine stdout + structured log/error events, with level filters.
 
 The **face preview is docked on the right and visible on every page**. It draws the robot
@@ -66,7 +83,7 @@ counter and what is happening, rather than just greying itself out.
 
 ```bash
 cd gui
-dotnet test ObotControl.Core.Tests/ObotControl.Core.Tests.csproj   # 29 tests, incl. a live engine round-trip
+dotnet test ObotControl.Core.Tests/ObotControl.Core.Tests.csproj   # 33 tests, incl. a live engine round-trip
 dotnet run  --project ObotControl.App/ObotControl.App.csproj        # launch the GUI
 # whole solution: dotnet build ObotControl.slnx
 ```
@@ -90,6 +107,12 @@ dotnet run  --project ObotControl.App/ObotControl.App.csproj        # launch the
    the same `config.json` the terminal app uses, so the two stay in sync.
 3. **Configuration**: drag the mouth-tuning sliders while the robot talks (applies live).
 4. **Dashboard**: pick backend/model/controller, **Start**, then talk or type.
+5. **ML Control** (optional): if the ML dependencies aren't installed yet, the page opens
+   with a checklist of what's missing and an **Install ML requirements** button that runs
+   pip into the engine's own environment  no terminal needed (a few hundred MB, several
+   minutes). After that, Rescan finds your trained checkpoints, **Use** + **Save** puts one
+   in charge of the motion, and **Preview** plays a clip through it on the live robot so you
+   can see what it does before it shows up mid-conversation.
 
 ### Talking to it (microphone)
 

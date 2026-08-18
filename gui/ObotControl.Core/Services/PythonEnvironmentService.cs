@@ -23,6 +23,9 @@ public sealed record PythonCandidate
 /// <summary>One step of <see cref="PythonEnvironmentService.EnsureAsync"/>, for a progress bar/log.</summary>
 public sealed record SetupProgress(string Stage, string Message, double? PercentComplete = null, bool IsError = false);
 
+/// <summary>Outcome of installing one requirements file into an existing environment.</summary>
+public sealed record RequirementsInstallResult(bool Ok, string Message);
+
 public sealed record PythonEnvironmentStatus
 {
     public bool IsReady { get; init; }
@@ -578,6 +581,66 @@ public sealed class PythonEnvironmentService
                 ObotInstalled = true,
             },
         };
+    }
+
+    /// <summary>
+    /// Installs one extra requirements file into an environment that already exists  used by
+    /// the ML Control page for <c>requirements/ml.txt</c> (torch and friends), which the base
+    /// setup deliberately leaves out because it is a large, optional download.
+    ///
+    /// Deliberately narrow: no venv creation, no interpreter discovery. The caller passes the
+    /// interpreter to install into  the ML page uses the one the *engine* reports as its own
+    /// (<c>sys.executable</c>), so the packages cannot land in some other venv than the one
+    /// that will import them.
+    /// </summary>
+    public async Task<RequirementsInstallResult> InstallRequirementsAsync(
+        string pythonExe, string repoRoot, string requirementsRelativePath,
+        IProgress<SetupProgress> progress, CancellationToken ct)
+    {
+        if (!File.Exists(pythonExe))
+        {
+            return new RequirementsInstallResult(false,
+                $"Python interpreter not found on this machine: {pythonExe}");
+        }
+
+        // The engine reports a repo-root-relative path ("requirements/ml.txt"); accept an
+        // absolute one too so this stays usable for any requirements file.
+        var reqPath = Path.IsPathRooted(requirementsRelativePath)
+            ? requirementsRelativePath
+            : Path.Combine(repoRoot, requirementsRelativePath.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(reqPath))
+        {
+            return new RequirementsInstallResult(false, $"requirements file not found: {reqPath}");
+        }
+
+        progress.Report(new SetupProgress("pip", $"installing {requirementsRelativePath} (this can take a while)…"));
+        int code;
+        try
+        {
+            code = await RunProcessAsync(
+                pythonExe, new[] { "-m", "pip", "install", "-r", reqPath }, repoRoot,
+                line => progress.Report(new SetupProgress("pip", line)), ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw; // the caller distinguishes "cancelled" from "failed"
+        }
+        catch (Exception ex)
+        {
+            // A path that exists but isn't a runnable interpreter (wrong architecture, a
+            // text file, no exec bit) throws rather than exiting non-zero.
+            return new RequirementsInstallResult(false, $"could not run {pythonExe}: {ex.Message}");
+        }
+
+        if (code != 0)
+        {
+            return new RequirementsInstallResult(false,
+                $"pip install -r {requirementsRelativePath} failed (exit {code})  see the Logs tab. " +
+                "If it reports a file in use, Disconnect the engine and try again.");
+        }
+
+        progress.Report(new SetupProgress("done", $"{requirementsRelativePath} installed", 100));
+        return new RequirementsInstallResult(true, $"{requirementsRelativePath} installed");
     }
 
     private static PythonEnvironmentStatus Failed(string venvPython, string message) => new()

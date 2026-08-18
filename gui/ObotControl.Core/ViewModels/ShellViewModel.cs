@@ -24,6 +24,7 @@ public partial class ShellViewModel : ObservableObject
     public SetupViewModel Setup { get; }
     public ConfigurationViewModel Configuration { get; }
     public ManualControlViewModel ManualControl { get; }
+    public MlControlViewModel MlControl { get; }
 
     public string[] LaunchControllers { get; } = { "virtual", "sim", "console" };
 
@@ -51,19 +52,27 @@ public partial class ShellViewModel : ObservableObject
         Logs = new LogsViewModel();
         var guiSettings = new GuiSettingsStore();
         Dashboard = new DashboardViewModel(Api, Logs, guiSettings);
-        var python = new PythonSetupViewModel(new PythonEnvironmentService(), guiSettings, Logs);
+        // One environment service, shared: the Setup page provisions the venv with it and
+        // ML Control installs the optional ML extras into whatever the engine reports.
+        var pythonService = new PythonEnvironmentService();
+        var python = new PythonSetupViewModel(pythonService, guiSettings, Logs);
         Setup = new SetupViewModel(Api, Store, Logs, python, new VoskModelSetupService());
         Configuration = new ConfigurationViewModel(Api, Store, Logs);
         ManualControl = new ManualControlViewModel(Api, Logs);
+        MlControl = new MlControlViewModel(Api, Store, Logs, pythonService);
 
         Client.StateChanged += (_, s) => HandleConnectionState(s);
         Client.EngineEventReceived += (_, e) => RouteEvent(e);
         Dashboard.PropertyChanged += (_, e) =>
         {
             // The dashboard owns session_start/session_stop; mirror its result so the
-            // manual-control panel knows whether set_joint/release_joint will succeed.
+            // manual-control panel knows whether set_joint/release_joint will succeed,
+            // and so ML Control knows a model preview has a controller to drive.
             if (e.PropertyName == nameof(DashboardViewModel.SessionActive))
+            {
                 ManualControl.NotifySessionActive(Dashboard.SessionActive);
+                MlControl.NotifySessionActive(Dashboard.SessionActive);
+            }
             // Mirrors get_state/session_start/session_stop's "emotion" field, so a fresh
             // session (or a reconnect to one already running) shows the real active pose.
             else if (e.PropertyName == nameof(DashboardViewModel.Emotion))
@@ -84,6 +93,7 @@ public partial class ShellViewModel : ObservableObject
             Logs.SetLogDirectory(Path.Combine(RepoRoot, "gui"));
             Setup.Python.Initialize(RepoRoot);
             Setup.SetRepoRoot(RepoRoot);
+            MlControl.SetRepoRoot(RepoRoot);
         }
     }
 
@@ -202,6 +212,10 @@ public partial class ShellViewModel : ObservableObject
         Setup.OnConnectionChanged(IsConnected);
         Configuration.OnConnectionChanged(IsConnected);
         ManualControl.OnConnectionChanged(IsConnected);
+        // The ML page installs dependencies with a local pip, so it needs to know whether
+        // the engine it is talking to is even on this machine.
+        MlControl.SetEngineHost(Host);
+        MlControl.OnConnectionChanged(IsConnected);
 
         if (IsConnected)
         {

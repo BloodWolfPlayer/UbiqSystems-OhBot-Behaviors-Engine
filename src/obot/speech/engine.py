@@ -72,6 +72,47 @@ class SpeechEngine:
         self._synth_sem = asyncio.Semaphore(2)
         self._stop_requested = False
         self._gesture_model = self._build_gesture_model(settings.gesture)
+        # What the loaded model was built from, so reload_gesture_model() can tell a
+        # real change from a config save that touched something else entirely.
+        self._gesture_key = self._gesture_settings_key(settings.gesture)
+        self._gesture_checkpoint = (
+            settings.gesture.checkpoint_path if self._gesture_model is not None else None
+        )
+
+    @staticmethod
+    def _gesture_settings_key(settings: AIGestureSettings) -> tuple:
+        """The settings that decide *which* model object is in memory. intensity and
+        control_hz are deliberately absent: those are read per sentence in
+        _predict_pose(), so editing them already applies live with no reload."""
+        return (settings.enabled, settings.checkpoint_path, settings.device)
+
+    @property
+    def gesture_checkpoint(self) -> str | None:
+        """Checkpoint currently loaded, or None when the scripted mouth track is in use."""
+        return self._gesture_checkpoint
+
+    def reload_gesture_model(self, force: bool = False) -> bool:
+        """Rebuild the AI gesture model from the live ``settings.gesture``.
+
+        The control server mutates the config in place, which is enough for the
+        per-sentence knobs -- but enabling the feature, pointing it at another
+        checkpoint, or switching device only takes effect when the model object is
+        rebuilt, which normally happens once at session start. This is how the GUI's
+        ML Control page applies those to a running session. Pass ``force`` to reload
+        the same path again after re-training it. Returns True when a model is loaded
+        afterwards. Blocking (imports torch, reads the file): call it off the loop.
+        """
+        settings = self.settings.gesture
+        key = self._gesture_settings_key(settings)
+        if not force and key == self._gesture_key:
+            return self._gesture_model is not None
+
+        self._gesture_key = key
+        self._gesture_model = self._build_gesture_model(settings)
+        self._gesture_checkpoint = (
+            settings.checkpoint_path if self._gesture_model is not None else None
+        )
+        return self._gesture_model is not None
 
     @staticmethod
     def _build_gesture_model(settings: AIGestureSettings) -> "GestureModel | None":

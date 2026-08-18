@@ -63,6 +63,10 @@ class AIGestureDriver:
             if self._player.error is not None:
                 raise self._player.error
 
+    def stop(self) -> None:
+        """Cut playback short. The pose loop follows the player, so it exits with it."""
+        self._player.abort()
+
     async def play_wav(self, wav_path: str, control_hz: float = 20.0, intensity: float = 1.0) -> None:
         import soundfile as sf
 

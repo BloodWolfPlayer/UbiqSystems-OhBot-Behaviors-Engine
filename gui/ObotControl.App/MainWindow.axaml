@@ -169,6 +169,15 @@
         <TabItem>
           <TabItem.Header>
             <StackPanel Orientation="Horizontal" Spacing="10" MinWidth="132">
+              <TextBlock Text="◉" VerticalAlignment="Center"/>
+              <TextBlock Text="ML Control" VerticalAlignment="Center"/>
+            </StackPanel>
+          </TabItem.Header>
+          <views:MlControlView DataContext="{Binding MlControl}"/>
+        </TabItem>
+        <TabItem>
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="10" MinWidth="132">
               <TextBlock Text="▤" VerticalAlignment="Center"/>
               <TextBlock Text="Logs" VerticalAlignment="Center"/>
             </StackPanel>
@@ -215,6 +224,11 @@
               <StackPanel Spacing="3">
                 <TextBlock Text="✥  Manual control" FontWeight="SemiBold" Foreground="{StaticResource AccentText}"/>
                 <TextBlock Text="{x:Static core:HelpText.PageManualControl}" TextWrapping="Wrap"
+                           Foreground="{StaticResource TextSecondary}"/>
+              </StackPanel>
+              <StackPanel Spacing="3">
+                <TextBlock Text="◉  ML Control" FontWeight="SemiBold" Foreground="{StaticResource AccentText}"/>
+                <TextBlock Text="{x:Static core:HelpText.PageMlControl}" TextWrapping="Wrap"
                            Foreground="{StaticResource TextSecondary}"/>
               </StackPanel>
               <StackPanel Spacing="3">

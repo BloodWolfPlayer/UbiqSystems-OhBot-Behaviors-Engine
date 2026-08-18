@@ -95,5 +95,17 @@
     "listening_nod": { "enabled": true, "min_interval_s": 2.5, "max_interval_s": 6.0, "intensity": 0.6 },
     "speaking_sway": { "enabled": true, "min_interval_s": 1.2, "max_interval_s": 2.8, "intensity": 0.6 },
     "idle_wander": { "enabled": true, "min_interval_s": 3.0, "max_interval_s": 8.0, "intensity": 1.0 }
+  },
+  "ml": {
+    "models": [
+      {
+        "name": "halfSize longRun",
+        "path": "src/obot/ml/models/halfSize_longRun.pt",
+        "notes": "Checkpoint tracked in this repo; the default gesture model."
+      }
+    ],
+    "scan_dirs": [],
+    "preview_wav": "mlBehaviour/sample_clip.wav",
+    "dataset_manifest": ""
   }
 }

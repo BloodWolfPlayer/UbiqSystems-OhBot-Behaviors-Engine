@@ -74,6 +74,11 @@ Then install dependencies for your platform:
 | Raspberry Pi | `pip install -r requirements/pi.txt` |
 | + ML gesture model (optional) | `pip install -r requirements/ml.txt` |
 
+The ML extras are a large, optional download (torch), so they are left out of the base
+install. You can also install them from the GUI: the **ML Control** page lists every
+dependency it is missing and installs `requirements/ml.txt` into the engine's own
+environment for you.
+
 > **Linux note:** `sounddevice` and `pyttsx3` need system libraries:
 > ```bash
 > sudo apt install libportaudio2 espeak-ng

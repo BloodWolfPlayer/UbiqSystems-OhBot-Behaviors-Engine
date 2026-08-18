@@ -152,6 +152,14 @@ class ControlServer:
             "release_all_joints": self._m_release_all_joints,
             "list_emotions": self._m_list_emotions,
             "set_emotion": self._m_set_emotion,
+            "list_ml_models": self._m_list_ml_models,
+            "inspect_ml_model": self._m_inspect_ml_model,
+            "ml_status": self._m_ml_status,
+            "ml_reload_model": self._m_ml_reload_model,
+            "ml_preview": self._m_ml_preview,
+            "ml_preview_stop": self._m_ml_preview_stop,
+            "list_ml_clips": self._m_list_ml_clips,
+            "ml_replay_clip": self._m_ml_replay_clip,
             "get_state": self._m_get_state,
             "ping": self._m_ping,
         }
@@ -277,6 +285,88 @@ class ControlServer:
             raise ValueError("set_emotion needs an 'emotion'.")
         await self._require_session().set_emotion(emotion)
         return {}
+
+    # -- ML gesture model ----------------------------------------------------------------
+    #
+    # The model *library* (config.json's "ml" section) is edited like every other config
+    # section, through set_config -- these methods only do what the GUI cannot: look at
+    # the filesystem and checkpoints on the engine host, and drive a live session.
+
+    async def _m_list_ml_models(self, params: dict) -> dict:
+        from ..ml import registry
+
+        # Filesystem scan: off the loop so a slow/network drive can't stall the server.
+        return await asyncio.to_thread(registry.list_models, self.cfg)
+
+    async def _m_inspect_ml_model(self, params: dict) -> dict:
+        from ..ml import registry
+
+        path = params.get("path") or self.cfg.speech.gesture.checkpoint_path
+        if not path:
+            raise ValueError("inspect_ml_model needs a 'path' (or a configured checkpoint).")
+        return await asyncio.to_thread(registry.inspect_checkpoint, path)
+
+    async def _m_ml_status(self, params: dict) -> dict:
+        from ..ml import registry
+
+        # "probe" imports torch to answer the CUDA question; without it the poll stays
+        # cheap and reports cuda_available: null ("not asked").
+        status = await asyncio.to_thread(
+            registry.runtime_status, self.cfg, bool(params.get("probe"))
+        )
+        if self._session is None:
+            status.update({
+                "session": False, "controller": None, "pose_capable": False,
+                "gesture_loaded": False, "loaded_checkpoint": None,
+                "preview_active": False, "preview_playing": "",
+            })
+        else:
+            status.update(self._session.ml_status())
+        return status
+
+    async def _m_ml_reload_model(self, params: dict) -> dict:
+        """Apply changed gesture settings (checkpoint/device/enabled) to the running
+        session without restarting it. ``force`` reloads the same path again, which is
+        what you want after re-training into it."""
+        return await self._require_session().reload_gesture_model(bool(params.get("force")))
+
+    async def _m_ml_preview(self, params: dict) -> dict:
+        gesture = self.cfg.speech.gesture
+        checkpoint = params.get("checkpoint") or gesture.checkpoint_path
+        wav = params.get("wav") or self.cfg.ml.preview_wav
+        if not checkpoint:
+            raise ValueError("ml_preview needs a 'checkpoint' (or a configured one).")
+        if not wav:
+            raise ValueError("ml_preview needs a 'wav' to play.")
+        return await self._require_session().ml_preview(
+            checkpoint=checkpoint,
+            wav=wav,
+            control_hz=float(params.get("control_hz", gesture.control_hz)),
+            intensity=float(params.get("intensity", gesture.intensity)),
+            device=params.get("device") or gesture.device,
+        )
+
+    async def _m_ml_preview_stop(self, params: dict) -> dict:
+        # Deliberately tolerant: this is a "make it stop" button, so a stale click after
+        # playback already ended is a no-op rather than an error.
+        stopped = self._session is not None and self._session.ml_preview_stop()
+        return {"stopped": stopped}
+
+    async def _m_list_ml_clips(self, params: dict) -> dict:
+        from ..ml import registry
+
+        manifest = params.get("manifest") or self.cfg.ml.dataset_manifest
+        return await asyncio.to_thread(registry.list_clips, manifest)
+
+    async def _m_ml_replay_clip(self, params: dict) -> dict:
+        clip_path = params.get("path")
+        if not clip_path:
+            raise ValueError("ml_replay_clip needs a clip 'path' (see list_ml_clips).")
+        return await self._require_session().ml_replay_clip(
+            clip_path=clip_path,
+            speed=float(params.get("speed", 1.0)),
+            play_audio=bool(params.get("play_audio", True)),
+        )
 
     async def _m_get_state(self, params: dict) -> dict:
         if self._session is None:

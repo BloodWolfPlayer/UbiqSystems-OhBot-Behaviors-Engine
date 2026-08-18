@@ -111,6 +111,70 @@ public static class HelpText
         "Toggle each and set how often / how strongly it fires.";
     public const string DirtyFlag = "You have unsaved changes on this page.";
 
+    // -- ML control --------------------------------------------------------------------
+    public const string MlIntro =
+        "The AI gesture model: a BEAT2-trained network that drives head, eyes, lids and lips " +
+        "straight from the speech waveform, instead of the scripted loudness-envelope mouth " +
+        "track. Off by default  it needs torch installed on the engine host and a trained " +
+        "checkpoint. Everything here writes config.json's speech.gesture / ml sections.";
+    public const string MlEnabled =
+        "Use the gesture model for speech instead of the scripted mouth track. The model is " +
+        "loaded when a session starts, or immediately with 'Apply to session' below. If loading " +
+        "or prediction ever fails, the engine falls back to the scripted track rather than going quiet.";
+    public const string MlLibrary =
+        "Every checkpoint the engine host can see: the ones named in config.json plus everything " +
+        "found under mlBehaviour/runs/ and src/obot/ml/models/. 'Use' makes one drive speech, " +
+        "'Inspect' opens it and reports axes/hyperparameters/training progress, and 'Keep' stores " +
+        "a discovered checkpoint in config.json under a name you choose.";
+    public const string MlAddModel =
+        "Register a checkpoint by path  a train.py .pt file (best_model.pt or checkpoint.pt). " +
+        "Paths inside the repo are stored repo-relative so the config stays portable; anything " +
+        "else is stored absolute. The path is resolved on the engine host, which may not be this machine.";
+    public const string MlInspect =
+        "Open the checkpoint on the engine host and report what it contains: how many Ohbot axes " +
+        "it drives, its mel/conv/GRU sizes, parameter count, epoch reached and best validation loss. " +
+        "Needs torch installed there; the first call pays torch's import.";
+    public const string MlDevice =
+        "torch device for inference: 'cpu' works everywhere (this model is small enough for it), " +
+        "'cuda' needs an NVIDIA GPU on the engine host  use Check runtime to confirm before selecting it.";
+    public const string MlControlHz =
+        "Pose predictions per second. This must match the --control-hz the checkpoint was trained " +
+        "with (beat2_to_ohbot.py's conversion rate, normally 20) or the motion comes out time-warped.";
+    public const string MlIntensity =
+        "Scales predicted movement around the rest position: 1.0 is the model's raw output, above " +
+        "that exaggerates the gestures, below that dampens them. Applies live while the robot talks.";
+    public const string MlScriptedMouth =
+        "Let the model drive head/eyes/lids but keep the lips on the scripted loudness-envelope " +
+        "track, which usually lip-syncs better than an early-stage model does.";
+    public const string MlRequirements =
+        "What the gesture model needs on the engine host, item by item: the pip packages the " +
+        "inference path imports (torch, numpy, scipy, soundfile) and the mlBehaviour/ training " +
+        "files that inference is loaded from. The base setup leaves these out on purpose  torch " +
+        "is a few hundred MB and the chat pipeline never needs it.";
+    public const string MlInstall =
+        "Runs 'pip install -r requirements/ml.txt' into the interpreter the engine itself is " +
+        "running on (shown above), streaming pip's output to the Logs tab. Expect a few hundred " +
+        "MB and several minutes. The engine imports torch lazily, so a running session picks the " +
+        "new packages up without a restart  no need to disconnect first. Only available when the " +
+        "engine is on this machine.";
+    public const string MlRuntime =
+        "Whether torch is installed on the engine host and which version. 'Check runtime' additionally " +
+        "imports it there to report whether CUDA is usable  that costs a few seconds, so it is not automatic.";
+    public const string MlLoaded =
+        "Which checkpoint the running session actually holds in memory. It can lag the configured " +
+        "one between a Save and an Apply, and stays empty until a session starts.";
+    public const string MlApply =
+        "Load the configured checkpoint into the running session without restarting the conversation. " +
+        "Use it after re-training into the same path too  it reloads either way.";
+    public const string MlPreview =
+        "Play an audio file through the selected checkpoint on the running robot, so you can watch " +
+        "the predicted motion before trusting it in a conversation. Needs an active session; on a " +
+        "console session you only get the audio, since it has no servos.";
+    public const string MlReplay =
+        "Replay one clip of a converted BEAT2 dataset exactly as recorded  ground truth, not a " +
+        "prediction. Watching this next to a preview is how you tell a weak model apart from a bad " +
+        "data conversion. Needs a dataset built by beat2_to_ohbot.py on the engine host.";
+
     // -- pages (overview, used by the Help overlay) ------------------------------------
     public const string PageDashboard =
         "Run a conversation: choose the backend/model/controller, Start, then type or talk. " +
@@ -128,6 +192,12 @@ public static class HelpText
         "a conversation. Enable to freeze every joint where it is, drag sliders to move one, Release to " +
         "hand control back to ambient behaviors and speech. The Emotions row above triggers a default " +
         "mouth/eyes/nod pose directly, the same one the LLM's (Emotion) tags apply. Needs a running session.";
+    public const string PageMlControl =
+        "The AI gesture model: pick which trained checkpoint drives head/eyes/lids/lips from the " +
+        "speech waveform, register new ones by path, and inspect what a checkpoint contains. Tune " +
+        "device, control rate and intensity (intensity applies live), preview a checkpoint on the " +
+        "live robot with any audio file, and replay recorded training clips as ground truth to " +
+        "compare against. Save also loads the model into a running session  no restart.";
     public const string PageLogs =
         "Everything the engine prints plus structured log/error events, with Info/Warning/Error filters.";
     public const string Intro =

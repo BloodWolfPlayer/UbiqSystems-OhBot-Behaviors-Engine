@@ -126,7 +126,7 @@ public sealed class MouthConfig
 }
 
 /// <summary>Mirrors AIGestureSettings (speech/config.py): the audio-driven gesture model
-/// that drives the servos straight from the speech waveform.</summary>
+/// that drives the servos straight from the speech waveform. Edited by the ML Control page.</summary>
 public sealed class GestureConfig
 {
     public bool Enabled { get; set; }
@@ -137,6 +137,10 @@ public sealed class GestureConfig
 
     public string Device { get; set; } = "cpu";
     public double Intensity { get; set; } = 1.0;
+
+    /// <summary>True = the model drives head/eyes/lids but the lips stay on the scripted
+    /// RMS-envelope mouth track (which usually lip-syncs better than the model does).</summary>
+    public bool ScriptedMouth { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -197,6 +201,30 @@ public sealed class BehaviorsConfig
     }
 }
 
+/// <summary>One named checkpoint in the ML model library (config.json's <c>ml.models</c>).
+/// Paths are repo-root-relative when the file lives inside the checkout, so a config
+/// stays portable  the engine resolves them (see ml/registry.py).</summary>
+public sealed class MlModelEntry
+{
+    public string Name { get; set; } = "";
+    public string Path { get; set; } = "";
+    public string Notes { get; set; } = "";
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>Mirrors MLSettings (ml/config.py): the gesture-model library the ML Control
+/// page manages. The model actually driving speech is picked in <see cref="GestureConfig"/>.</summary>
+public sealed class MlConfig
+{
+    public List<MlModelEntry> Models { get; set; } = new();
+    public List<string> ScanDirs { get; set; } = new();
+    public string PreviewWav { get; set; } = "mlBehaviour/sample_clip.wav";
+    public string DatasetManifest { get; set; } = "";
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
 public sealed class ObotConfig
 {
     public string GeminiApiKey { get; set; } = "";
@@ -208,6 +236,7 @@ public sealed class ObotConfig
     public SpeechConfig Speech { get; set; } = new();
     public MotionConfig Motion { get; set; } = new();
     public BehaviorsConfig Behaviors { get; set; } = new();
+    public MlConfig Ml { get; set; } = new();
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 

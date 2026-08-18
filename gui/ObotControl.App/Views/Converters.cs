@@ -63,4 +63,20 @@ public static class Converters
 
     /// <summary>True when a collection is empty -- drives the "nothing here yet" placeholders.</summary>
     public static readonly IValueConverter IsEmpty = new FuncValueConverter<int, bool>(count => count == 0);
+
+    /// <summary>True for a non-blank string -- hides status lines that have nothing to say.</summary>
+    public static readonly IValueConverter IsNotEmptyText = new FuncValueConverter<string?, bool>(
+        text => !string.IsNullOrWhiteSpace(text));
+
+    /// <summary>Tints the picked row of a list (the ML Control model library) so the active
+    /// choice reads at a glance. Transparent leaves the inset card's own fill showing.</summary>
+    public static readonly IValueConverter SelectedRowBrush = new FuncValueConverter<bool, IBrush>(
+        selected => selected ? new SolidColorBrush(AccentSoft) : Brushes.Transparent);
+
+    /// <summary>Present/missing tick for the ML dependency checklist.</summary>
+    public static readonly IValueConverter CheckMark = new FuncValueConverter<bool, string>(
+        present => present ? "✓" : "✗");
+
+    public static readonly IValueConverter PresenceBrush = new FuncValueConverter<bool, IBrush>(
+        present => new SolidColorBrush(present ? SuccessColor : DangerColor));
 }
