@@ -1,6 +1,3 @@
-
-
-
 # Training pipeline
 
 ## Overview
@@ -15,13 +12,13 @@ This directory contains the following key files:
 
 ## Install
 
-The ML training pipeline requires Python 3.10+ and the following dependencies:
+The ML training pipeline needs Python 3.12 (like the rest of the project) and the following dependencies:
 
 ```bash
 pip install torch numpy scipy
 ```
 
-If you have already installed the dependencies via the main application, you can skip this step. Otherwise, you can install the required dependencies by running:
+If you have already installed the ML extras for the main application, you can skip this step. Alternatively, run the following from the repository root (not from `mlBehaviour/`). It also installs the engine's base dependencies and the audio and plotting extras (soundfile, matplotlib):
 
 ```bash
 pip install -r requirements/ml.txt

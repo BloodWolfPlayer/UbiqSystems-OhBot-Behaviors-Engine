@@ -121,7 +121,7 @@ Then click **Launch engine** (or **Attach**), the GUI drives everything via the 
 python -m obot --serve              # ws://127.0.0.1:8765
 ```
 
-Using specific flag will chagne how the engine behaves. For more information on various CLI entry points, see [docs/cli.md](docs/cli.md).
+Using specific flags changes how the engine behaves. For more information on the various CLI entry points, see [docs/cli.md](docs/cli.md).
 
 **Standalone (no GUI):**
 
@@ -147,15 +147,15 @@ A single **Avalonia** app that runs natively on Windows, Linux and the Pi. It ha
 
 ## ML Gesture Model
 
-The `obot.ml` module can drive natural head/eye/lid motion from a neural network trained on the [BEAT2 dataset](https://beatresearch.github.io/). During live conversation, it takes the TTS audio and predicts servo positions at 20 Hz, producing lifelike movement that's synced to speech rhythm.
+The `obot.ml` module can drive natural head/eye/lid motion from a neural network trained on the [BEAT2 dataset](https://huggingface.co/datasets/H-Liu1997/BEAT2). During live conversation, it takes the TTS audio and predicts servo positions at 20 Hz, producing lifelike movement that's synced to speech rhythm.
 
-Run it standalone against a wav file:
+Run it standalone against a wav file. The repo ships a checkpoint and a sample clip, so this works from a fresh clone once the ML extras are installed:
 
 ```bash
-python -m obot.ml mlBehaviour/runs/my_experiment/best_model.pt audio.wav --sim
+python -m obot.ml src/obot/ml/models/halfSize_longRun.pt mlBehaviour/sample_clip.wav --sim
 ```
 
-Ensure the engine server is running (`python -m obot --serve`) and the GUI is connected to see the predicted motion in the simulator.
+This runs on its own, no engine server needed: `--sim` opens the digital OhBot window, `--console` uses the hardware-free console controller, and without either flag it tries the real robot (falling back to the console controller if none is found). To watch a checkpoint in the GUI's face preview instead, start a session in the GUI and use the **ML Control** page's Preview (see [gui/README.md](gui/README.md)).
 
 Training pipeline and dataset conversion live in [mlBehaviour/](mlBehaviour/README.md).
 
