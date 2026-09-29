@@ -221,6 +221,22 @@ __marimo__/
 config.json
 /ohbotData
 
+# Credentials and key material. Defensive: none of these belong in the repo.
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.ppk
+id_rsa*
+id_ed25519*
+id_ecdsa*
+secrets.json
+credentials.json
+service-account*.json
+client_secret*.json
+
 # .NET GUI build output (gui/ObotControl)
 gui/**/bin/
 gui/**/obj/
@@ -232,7 +248,8 @@ gui/logs/
 # training data
 ohbot_data
 
-mlBehaviour/data_pipeline/recordings/*
+# webcam video and microphone audio written by custom_data_pipeline/recorder.py
+mlBehaviour/*data_pipeline/recordings/*
 
 mlBehaviour/runs/*
 mlBehaviour/legacyTraining/*
